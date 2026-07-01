@@ -595,7 +595,7 @@ async def i_have_paid(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 # ref_id already consumed by another account — deny access
                 raise ValueError("already_recorded")
             keyboard = [
-                [InlineKeyboardButton(u("🔓 Join Premium Channel"), url=PREMIUM_CHANNEL_LINK)],
+                [InlineKeyboardButton(u("🔓 Join Premium Channel"), url=plan.get("channel_link", PREMIUM_CHANNEL_LINK))],
                 [InlineKeyboardButton(u("🏠 Back to Main Menu"),    callback_data="back_main")],
             ]
             msg = (
@@ -677,7 +677,7 @@ async def developer(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await safe_edit(query, context, msg, keyboard)
 
 # ── /newplan (admin) ──────────────────────────────────────────────────────────
-NP_NAME, NP_DESC, NP_PRICE, NP_PAYDESC = range(4)
+NP_NAME, NP_DESC, NP_PRICE, NP_PAYDESC, NP_LINK = range(5)
 
 async def np_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_admin(update.effective_user):
@@ -685,7 +685,7 @@ async def np_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return ConversationHandler.END
     context.user_data.clear()
     await update.message.reply_text(
-        f"➕ {b('New Plan — Step 1/4')}\n\n"
+        f"➕ {b('New Plan — Step 1/5')}\n\n"
         f"{b('Send The Plan Name')} — {u('this will appear as the button text.')}\n\n"
         f"{u('Send /cancel to stop.')}",
         parse_mode=ParseMode.HTML,
@@ -696,7 +696,7 @@ async def np_got_name(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data["np_name"] = update.message.text.strip()
     await update.message.reply_text(
         f"✅ {b('Name Saved')}: <b>{context.user_data['np_name']}</b>\n\n"
-        f"➕ {b('Step 2/4')} — {b('Send The Description.')}\n"
+        f"➕ {b('Step 2/5')} — {b('Send The Description.')}\n"
         f"{u('Any formatting (bold, spoiler, italic) will be preserved exactly as sent.')}",
         parse_mode=ParseMode.HTML,
     )
@@ -706,7 +706,7 @@ async def np_got_desc(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data["np_desc"] = update.message.text_html
     await update.message.reply_text(
         f"✅ {b('Description Saved.')}\n\n"
-        f"➕ {b('Step 3/4')} — {b('Send The Price')} {u('(number only, e.g.')} <code>299</code>{u(')')}",
+        f"➕ {b('Step 3/5')} — {b('Send The Price')} {u('(number only, e.g.')} <code>299</code>{u(')')}",
         parse_mode=ParseMode.HTML,
     )
     return NP_PRICE
@@ -725,7 +725,7 @@ async def np_got_price(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data["np_price"] = price
     await update.message.reply_text(
         f"✅ {b('Price')}: ₹{price}\n\n"
-        f"➕ {b('Step 4/4')} — {b('Send The Payment Description.')}\n"
+        f"➕ {b('Step 4/5')} — {b('Send The Payment Description.')}\n"
         f"{u('This appears in Razorpay during payment, e.g.')}\n"
         f"<code>Subscription: HAWT PACK</code>",
         parse_mode=ParseMode.HTML,
@@ -733,11 +733,23 @@ async def np_got_price(update: Update, context: ContextTypes.DEFAULT_TYPE):
     return NP_PAYDESC
 
 async def np_got_paydesc(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    pay_desc = update.message.text.strip()
-    name     = context.user_data["np_name"]
-    desc     = context.user_data["np_desc"]
-    price    = context.user_data["np_price"]
-    pid      = uuid.uuid4().hex[:8]
+    context.user_data["np_paydesc"] = update.message.text.strip()
+    await update.message.reply_text(
+        f"✅ {b('Payment Description Saved.')}\n\n"
+        f"➕ {b('Step 5/5')} — {b('Send The Premium Channel Link.')}\n"
+        f"{u('This is the invite link users get after successful payment, e.g.')}\n"
+        f"<code>https://t.me/+xxxxxxxxxx</code>",
+        parse_mode=ParseMode.HTML,
+    )
+    return NP_LINK
+
+async def np_got_link(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    channel_link = update.message.text.strip()
+    name         = context.user_data["np_name"]
+    desc         = context.user_data["np_desc"]
+    price        = context.user_data["np_price"]
+    pay_desc     = context.user_data["np_paydesc"]
+    pid          = uuid.uuid4().hex[:8]
 
     plans_col.insert_one({
         "id":              pid,
@@ -745,6 +757,7 @@ async def np_got_paydesc(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "description":     desc,
         "price":           price,
         "pay_description": pay_desc,
+        "channel_link":    channel_link,
         "created_at":      datetime.now(timezone.utc),
     })
 
@@ -753,7 +766,8 @@ async def np_got_paydesc(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"🆔 {b('ID')}: <code>{pid}</code>\n"
         f"📌 {b('Name')}: {name}\n"
         f"💰 {b('Price')}: ₹{price}\n"
-        f"📝 {b('Payment Description')}: {pay_desc}",
+        f"📝 {b('Payment Description')}: {pay_desc}\n"
+        f"🔗 {b('Channel Link')}: {channel_link}",
         parse_mode=ParseMode.HTML,
     )
     context.user_data.clear()
@@ -862,6 +876,7 @@ def main():
             NP_DESC:    [MessageHandler(filters.TEXT & ~filters.COMMAND, np_got_desc)],
             NP_PRICE:   [MessageHandler(filters.TEXT & ~filters.COMMAND, np_got_price)],
             NP_PAYDESC: [MessageHandler(filters.TEXT & ~filters.COMMAND, np_got_paydesc)],
+            NP_LINK:    [MessageHandler(filters.TEXT & ~filters.COMMAND, np_got_link)],
         },
         fallbacks=[CommandHandler("cancel", np_cancel)],
     )
