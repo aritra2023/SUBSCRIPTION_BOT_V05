@@ -75,10 +75,7 @@ def get_plan(pid):
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 def is_admin(user) -> bool:
-    return (
-        user.id in ADMIN_IDS or
-        (user.username or "").lower() == ADMIN_USERNAME.lower()
-    )
+    return user.id in ADMIN_IDS
 
 def save_user(user):
     """Upsert user record in MongoDB."""
@@ -93,17 +90,23 @@ def save_user(user):
         upsert=True,
     )
 
-def record_payment(user_id, plan, ref_id, pay_type):
-    """Record a successful payment in MongoDB."""
-    pays_col.insert_one({
-        "user_id":    user_id,
-        "plan_id":    plan["id"],
-        "plan_name":  plan["channel"],
-        "amount":     plan["price"],
-        "pay_type":   pay_type,
-        "ref_id":     ref_id,
-        "paid_at":    datetime.now(timezone.utc),
-    })
+def record_payment(user_id, plan, ref_id, pay_type) -> bool:
+    """Record a successful payment in MongoDB (idempotent on ref_id).
+    Returns True if a new record was inserted, False if already recorded."""
+    result = pays_col.update_one(
+        {"ref_id": ref_id},
+        {"$setOnInsert": {
+            "user_id":    user_id,
+            "plan_id":    plan["id"],
+            "plan_name":  plan["channel"],
+            "amount":     plan["price"],
+            "pay_type":   pay_type,
+            "ref_id":     ref_id,
+            "paid_at":    datetime.now(timezone.utc),
+        }},
+        upsert=True,
+    )
+    return result.upserted_id is not None
 
 async def safe_edit(query, context, text, keyboard, parse_mode=ParseMode.HTML):
     rm = InlineKeyboardMarkup(keyboard)
@@ -549,43 +552,49 @@ async def i_have_paid(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await safe_edit(query, context, f"🔄 {b('Checking Payment...')}", [])
     try:
+        # Only use the server-side pending entry for this user — never trust callback data
+        # for ref_id, as that would allow replay attacks with previously paid references.
+        pending = pending_payments.get(query.from_user.id)
+        if not pending:
+            raise ValueError("no_pending")
+
+        stored_ref  = pending.get("ref_id", "")
+        stored_type = pending.get("type", "link")
+        stored_pid  = pending.get("pid", "")
+
+        # Reject if the callback's plan doesn't match the server-side pending plan
+        if stored_pid and stored_pid != pid:
+            raise ValueError("plan_mismatch")
+
+        if not stored_ref:
+            raise ValueError("no_ref")
+
         verified = False
-        if ptype == "link" and ref_id:
-            details = razorpay_client.payment_link.fetch(ref_id)
+        if stored_type == "link":
+            details = razorpay_client.payment_link.fetch(stored_ref)
             if details.get("status") == "paid":
                 verified = True
-        elif ptype == "qr" and ref_id:
-            payments = razorpay_client.qrcode.fetch_all_payments(ref_id)
+        elif stored_type == "qr":
+            payments = razorpay_client.qrcode.fetch_all_payments(stored_ref)
             for item in (payments.get("items") or []):
                 if item.get("status") == "captured":
                     verified = True
                     break
-        if not verified:
-            pending = pending_payments.get(query.from_user.id, {})
-            stored_ref  = pending.get("ref_id", "")
-            stored_type = pending.get("type", "link")
-            if stored_ref:
-                if stored_type == "link":
-                    d = razorpay_client.payment_link.fetch(stored_ref)
-                    if d.get("status") == "paid":
-                        verified = True
-                elif stored_type == "qr":
-                    p = razorpay_client.qrcode.fetch_all_payments(stored_ref)
-                    for item in (p.get("items") or []):
-                        if item.get("status") == "captured":
-                            verified = True
-                            break
-        if verified:
+
+        if verified and plan:
+            # Consume the pending entry before recording to prevent double-grant
             pending_payments.pop(query.from_user.id, None)
-            if plan:
-                record_payment(query.from_user.id, plan, ref_id, ptype)
+            newly_inserted = record_payment(query.from_user.id, plan, stored_ref, stored_type)
+            if not newly_inserted:
+                # ref_id already consumed by another account — deny access
+                raise ValueError("already_recorded")
             keyboard = [
                 [InlineKeyboardButton(u("🔓 Join Premium Channel"), url=PREMIUM_CHANNEL_LINK)],
                 [InlineKeyboardButton(u("🏠 Back to Main Menu"),    callback_data="back_main")],
             ]
             msg = (
                 f"✅ {b('Payment Verified Successfully!')}\n\n"
-                f"🎉 {b('Welcome To')} {b(plan['channel']) if plan else ''}!\n\n"
+                f"🎉 {b('Welcome To')} {b(plan['channel'])}!\n\n"
                 f"🔑 {b('Token Timeout')}: 1 {b('days')}\n\n"
                 f"{b('Click The Button Below To Join Your Premium Channel')} 👇\n\n"
                 f"{b('If You Face Any Issue Contact')}: @{ADMIN_USERNAME}\n\n"
