@@ -59,6 +59,7 @@ def b(text):
 
 # ── Plans ─────────────────────────────────────────────────────────────────────
 PLANS = [
+    {"id": "test",  "channel": "Test Plan - ₹1",                   "category": "TEST",       "price": 1},
     {"id": "hawt",  "channel": "Plan 1 - HAWT PACK",               "category": "SNAP PRIME", "price": 199},
     {"id": "desi",  "channel": "Plan 2 - DESI PACK",               "category": "SNAP PRIME", "price": 299},
     {"id": "snap",  "channel": "Plan 3 - OG SNAP PACK",            "category": "SNAP PRIME", "price": 399},
@@ -533,15 +534,9 @@ async def pay_qr(update: Update, context: ContextTypes.DEFAULT_TYPE):
             parse_mode=ParseMode.HTML,
         )
 
-    # ── Step 2b: generation failed — show error on the SAME message (no delete)
+    # ── Step 2b: generation failed — restore the payment method selection screen
     else:
-        keyboard = [
-            [InlineKeyboardButton(u("🔄 Try Again"), callback_data=f"qr_{pid}")],
-            [InlineKeyboardButton(u("🔙 Back"),      callback_data=f"buy_{pid}")],
-        ]
-        await safe_edit(query, context,
-            f"❌ {b('Could not generate QR code. Please try again.')}",
-            keyboard)
+        await buy_plan(update, context)
 
 async def i_have_paid(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
