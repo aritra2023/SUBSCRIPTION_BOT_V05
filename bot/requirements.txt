@@ -1,0 +1,4 @@
+python-telegram-bot==21.6
+razorpay==1.4.1
+qrcode[pil]==7.4.2
+Pillow==10.4.0
