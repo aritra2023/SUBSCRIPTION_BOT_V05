@@ -231,10 +231,24 @@ async def pay_qr(update: Update, context: ContextTypes.DEFAULT_TYPE):
         qr_id     = qr_resp.get("id", "")
         image_url = qr_resp.get("image_url", "")
 
-        # Download the QR image Razorpay generated
+        # Download Razorpay branded QR image and crop to bare QR code only
+        from PIL import Image as PilImage
         with urllib.request.urlopen(image_url) as resp:
             img_bytes = resp.read()
-        buf = io.BytesIO(img_bytes)
+        full_img = PilImage.open(io.BytesIO(img_bytes)).convert("RGB")
+        w, h = full_img.size
+        # Razorpay image layout: Razorpay header (~0-22%), white QR card (~22-70%),
+        # payment app logos + description (~70-100%).
+        # Within the card: BHIM/UPI logos, then the bare QR, then "SCAN & PAY" text.
+        # We crop to extract ONLY the black-and-white QR squares (no logos, no text).
+        crop = full_img.crop((
+            int(w * 0.08),   # left  — slight padding
+            int(h * 0.30),   # top   — skip Razorpay header + BHIM/UPI card header
+            int(w * 0.92),   # right — slight padding
+            int(h * 0.67),   # bottom — skip "SCAN & PAY" + footer
+        ))
+        buf = io.BytesIO()
+        crop.save(buf, format="PNG")
         buf.seek(0)
 
         pending_payments[query.from_user.id] = {
