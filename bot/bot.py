@@ -29,6 +29,7 @@ RAZORPAY_KEY_ID    = os.environ["RAZORPAY_KEY_ID"]
 RAZORPAY_KEY_SECRET= os.environ["RAZORPAY_KEY_SECRET"]
 MONGODB_URI        = os.environ["MONGODB_URI"]
 ADMIN_USERNAME     = "aritramahatma"        # without @
+ADMIN_IDS          = {7342290214}           # numeric admin IDs
 PREMIUM_CHANNEL_LINK = "https://t.me/+K2hQ7Cdgm1Y3MjY1"
 
 razorpay_client = razorpay.Client(auth=(RAZORPAY_KEY_ID, RAZORPAY_KEY_SECRET))
@@ -74,7 +75,10 @@ def get_plan(pid):
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 def is_admin(user) -> bool:
-    return (user.username or "").lower() == ADMIN_USERNAME.lower()
+    return (
+        user.id in ADMIN_IDS or
+        (user.username or "").lower() == ADMIN_USERNAME.lower()
+    )
 
 def save_user(user):
     """Upsert user record in MongoDB."""
@@ -462,6 +466,11 @@ async def pay_qr(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not plan:
         await safe_edit(query, context, b("Plan not found."), [])
         return
+
+    # ── Step 1: generate everything BEFORE touching the current message ────────
+    buf    = None
+    qr_id  = ""
+    gen_ok = False
     try:
         from PIL import Image as PilImage
         qr_resp = razorpay_client.qrcode.create({
@@ -489,7 +498,12 @@ async def pay_qr(update: Update, context: ContextTypes.DEFAULT_TYPE):
         buf = io.BytesIO()
         crop.save(buf, format="PNG")
         buf.seek(0)
+        gen_ok = True
+    except Exception as e:
+        logger.error(f"QR generation failed: {e}")
 
+    # ── Step 2a: generation succeeded — delete old msg and send QR photo ──────
+    if gen_ok and buf:
         pending_payments[query.from_user.id] = {
             "pid": pid, "type": "qr", "ref_id": qr_id,
             "amount": plan["price"], "timestamp": time.time(),
@@ -518,11 +532,15 @@ async def pay_qr(update: Update, context: ContextTypes.DEFAULT_TYPE):
             reply_markup=InlineKeyboardMarkup(keyboard),
             parse_mode=ParseMode.HTML,
         )
-    except Exception as e:
-        logger.error(f"QR error: {e}")
-        keyboard = [[InlineKeyboardButton(u("🔙 Back"), callback_data=f"buy_{pid}")]]
+
+    # ── Step 2b: generation failed — show error on the SAME message (no delete)
+    else:
+        keyboard = [
+            [InlineKeyboardButton(u("🔄 Try Again"), callback_data=f"qr_{pid}")],
+            [InlineKeyboardButton(u("🔙 Back"),      callback_data=f"buy_{pid}")],
+        ]
         await safe_edit(query, context,
-            f"❌ {b('Error generating QR. Please try again or contact support.')}\n@{ADMIN_USERNAME}",
+            f"❌ {b('Could not generate QR code. Please try again.')}",
             keyboard)
 
 async def i_have_paid(update: Update, context: ContextTypes.DEFAULT_TYPE):
