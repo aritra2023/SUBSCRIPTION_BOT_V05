@@ -3,6 +3,7 @@ import logging
 import razorpay
 import io
 import time
+import uuid
 import urllib.request
 from datetime import datetime, timezone
 from pymongo import MongoClient
@@ -11,6 +12,7 @@ from telegram.ext import (
     Application,
     CommandHandler,
     CallbackQueryHandler,
+    ConversationHandler,
     ContextTypes,
     MessageHandler,
     filters,
@@ -35,10 +37,11 @@ PREMIUM_CHANNEL_LINK = "https://t.me/+K2hQ7Cdgm1Y3MjY1"
 razorpay_client = razorpay.Client(auth=(RAZORPAY_KEY_ID, RAZORPAY_KEY_SECRET))
 
 # ── MongoDB ───────────────────────────────────────────────────────────────────
-mongo     = MongoClient(MONGODB_URI)
-db        = mongo["paybot"]
-users_col = db["users"]
-pays_col  = db["payments"]
+mongo      = MongoClient(MONGODB_URI)
+db         = mongo["paybot"]
+users_col  = db["users"]
+pays_col   = db["payments"]
+plans_col  = db["plans"]
 
 # ── In-memory ─────────────────────────────────────────────────────────────────
 pending_payments    = {}   # user_id → payment info
@@ -57,21 +60,23 @@ def u(text):
 def b(text):
     return f"<b>{u(text)}</b>"
 
-# ── Plans ─────────────────────────────────────────────────────────────────────
-PLANS = [
-    {"id": "hawt",  "channel": "Plan 1 - HAWT PACK",               "category": "SNAP PRIME", "price": 199},
-    {"id": "desi",  "channel": "Plan 2 - DESI PACK",               "category": "SNAP PRIME", "price": 299},
-    {"id": "snap",  "channel": "Plan 3 - OG SNAP PACK",            "category": "SNAP PRIME", "price": 399},
-    {"id": "rare",  "channel": "Plan 4 - RARE IRL AND EPIC 2 IN 1","category": "EPIC PRIME", "price": 499},
-    {"id": "combo", "channel": "Plan 5 - Combo All Plans",          "category": "MEGA PRIME", "price": 699},
-    {"id": "famp",  "channel": "Plan 6 - FAMP EXCLUSIVE",           "category": "FAMP PRIME", "price": 999},
+# ── Plans (MongoDB-backed) ────────────────────────────────────────────────────
+_SEED_PLANS = [
+    {"id": "hawt",  "channel": "Plan 1 - HAWT PACK",                "description": "<b>ʜᴀᴡᴛ ᴘᴀᴄᴋ</b>", "price": 199, "pay_description": "Subscription: HAWT PACK"},
+    {"id": "desi",  "channel": "Plan 2 - DESI PACK",                "description": "<b>ᴅᴇsɪ ᴘᴀᴄᴋ</b>", "price": 299, "pay_description": "Subscription: DESI PACK"},
+    {"id": "snap",  "channel": "Plan 3 - OG SNAP PACK",             "description": "<b>ᴏɢ sɴᴀᴘ ᴘᴀᴄᴋ</b>", "price": 399, "pay_description": "Subscription: OG SNAP PACK"},
+    {"id": "rare",  "channel": "Plan 4 - RARE IRL AND EPIC 2 IN 1", "description": "<b>ʀᴀʀᴇ ɪʀʟ &amp; ᴇᴘɪᴄ</b>", "price": 499, "pay_description": "Subscription: RARE IRL AND EPIC"},
+    {"id": "combo", "channel": "Plan 5 - Combo All Plans",           "description": "<b>ᴄᴏᴍʙᴏ ᴀʟʟ ᴘʟᴀɴs</b>", "price": 699, "pay_description": "Subscription: Combo All Plans"},
+    {"id": "famp",  "channel": "Plan 6 - FAMP EXCLUSIVE",            "description": "<b>ғᴀᴍᴘ ᴇxᴄʟᴜsɪᴠᴇ</b>", "price": 999, "pay_description": "Subscription: FAMP EXCLUSIVE"},
 ]
+if plans_col.count_documents({}) == 0:
+    plans_col.insert_many(_SEED_PLANS)
+
+def get_all_plans():
+    return list(plans_col.find({}, {"_id": 0}))
 
 def get_plan(pid):
-    for p in PLANS:
-        if p["id"] == pid:
-            return p
-    return None
+    return plans_col.find_one({"id": pid}, {"_id": 0})
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 def is_admin(user) -> bool:
@@ -350,7 +355,7 @@ async def menu_plans(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
     save_user(query.from_user)
-    keyboard = [[InlineKeyboardButton(u(p["channel"]), callback_data=f"showplan_{p['id']}")] for p in PLANS]
+    keyboard = [[InlineKeyboardButton(u(p["channel"]), callback_data=f"showplan_{p['id']}")] for p in get_all_plans()]
     keyboard.append([InlineKeyboardButton(u("🔙 Back"), callback_data="back_main")])
     msg = f"📦 {b('Available Premium Channels')}\n\n{b('Select A Channel To View Subscription Plans')} 👇"
     await safe_edit(query, context, msg, keyboard)
@@ -372,9 +377,10 @@ async def show_plan(update: Update, context: ContextTypes.DEFAULT_TYPE):
         [InlineKeyboardButton(f"₹{plan['price']} - " + u("Permanent"), callback_data=f"buy_{pid}")],
         [InlineKeyboardButton(u("🔙 Back"), callback_data="menu_plans")],
     ]
+    desc = plan.get("description", "")
     msg = (
-        f"📺 {b(plan['channel'])}\n"
-        f"{b('Category')}: {b(plan['category'])}\n\n"
+        f"📺 {b(plan['channel'])}\n\n"
+        f"{desc}\n\n"
         f"{b('Available Plans')} 👇\n"
         f"• {b('Permanent')}: ₹{plan['price']}\n\n"
         f"{b('Select A Plan To Subscribe Or Click View Sample Content To See A Preview')} 🔥"
@@ -429,7 +435,7 @@ async def pay_razorpay(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "amount": plan["price"] * 100,
             "currency": "INR",
             "accept_partial": False,
-            "description": f"Subscription: {plan['channel']}",
+            "description": plan.get("pay_description", f"Subscription: {plan['channel']}"),
             "notify": {"sms": False, "email": False},
             "reminder_enable": False,
             "notes": {"plan_id": pid, "user_id": str(query.from_user.id)},
@@ -482,7 +488,7 @@ async def pay_qr(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "usage": "single_use",
             "fixed_amount": True,
             "payment_amount": plan["price"] * 100,
-            "description": f"Subscription: {plan['channel']}",
+            "description": plan.get("pay_description", f"Subscription: {plan['channel']}"),
             "close_by": int(time.time()) + 900,
         })
         qr_id     = qr_resp.get("id", "")
@@ -670,34 +676,204 @@ async def developer(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
     await safe_edit(query, context, msg, keyboard)
 
+# ── /newplan (admin) ──────────────────────────────────────────────────────────
+NP_NAME, NP_DESC, NP_PRICE, NP_PAYDESC = range(4)
+
+async def np_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not is_admin(update.effective_user):
+        await update.message.reply_text(b("❌ Admin only command."), parse_mode=ParseMode.HTML)
+        return ConversationHandler.END
+    context.user_data.clear()
+    await update.message.reply_text(
+        f"➕ {b('New Plan — Step 1/4')}\n\n"
+        f"Plan ka {b('naam')} bhejo — yahi button mein dikhega.\n\n"
+        f"{u('cancel karne ke liye /cancel bhejo')}",
+        parse_mode=ParseMode.HTML,
+    )
+    return NP_NAME
+
+async def np_got_name(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    context.user_data["np_name"] = update.message.text.strip()
+    await update.message.reply_text(
+        f"✅ Naam: <b>{context.user_data['np_name']}</b>\n\n"
+        f"➕ {b('Step 2/4')} — Ab {b('description')} bhejo.\n"
+        f"Bold, spoiler, italic — jo bhi formatting chahiye waise bhejo, same to same save hoga.",
+        parse_mode=ParseMode.HTML,
+    )
+    return NP_DESC
+
+async def np_got_desc(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    # Store HTML-formatted description to preserve all formatting
+    context.user_data["np_desc"] = update.message.text_html
+    await update.message.reply_text(
+        f"✅ Description save.\n\n"
+        f"➕ {b('Step 3/4')} — Ab {b('price')} bhejo (sirf number, jaise <code>299</code>).",
+        parse_mode=ParseMode.HTML,
+    )
+    return NP_PRICE
+
+async def np_got_price(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    try:
+        price = int(update.message.text.strip())
+        if price <= 0:
+            raise ValueError
+    except ValueError:
+        await update.message.reply_text(
+            f"❌ Sirf number dalo, jaise <code>299</code>. Dobara try karo:",
+            parse_mode=ParseMode.HTML,
+        )
+        return NP_PRICE
+    context.user_data["np_price"] = price
+    await update.message.reply_text(
+        f"✅ Price: ₹{price}\n\n"
+        f"➕ {b('Step 4/4')} — Ab {b('payment description')} bhejo.\n"
+        f"Ye Razorpay mein dikhta hai payment ke time, jaise:\n"
+        f"<code>Subscription: HAWT PACK</code>",
+        parse_mode=ParseMode.HTML,
+    )
+    return NP_PAYDESC
+
+async def np_got_paydesc(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    pay_desc = update.message.text.strip()
+    name     = context.user_data["np_name"]
+    desc     = context.user_data["np_desc"]
+    price    = context.user_data["np_price"]
+    pid      = uuid.uuid4().hex[:8]
+
+    plans_col.insert_one({
+        "id":              pid,
+        "channel":         name,
+        "description":     desc,
+        "price":           price,
+        "pay_description": pay_desc,
+    })
+
+    await update.message.reply_text(
+        f"✅ {b('Plan Successfully Add Ho Gaya!')} 🎉\n\n"
+        f"🆔 ID: <code>{pid}</code>\n"
+        f"📌 {b('Naam')}: {name}\n"
+        f"💰 {b('Price')}: ₹{price}\n"
+        f"📝 {b('Pay Desc')}: {pay_desc}",
+        parse_mode=ParseMode.HTML,
+    )
+    context.user_data.clear()
+    return ConversationHandler.END
+
+async def np_cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    context.user_data.clear()
+    await update.message.reply_text(b("❌ New plan cancelled."), parse_mode=ParseMode.HTML)
+    return ConversationHandler.END
+
+# ── /removeplan (admin) ───────────────────────────────────────────────────────
+async def cmd_removeplan(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not is_admin(update.effective_user):
+        await update.message.reply_text(b("❌ Admin only command."), parse_mode=ParseMode.HTML)
+        return
+    plans = get_all_plans()
+    if not plans:
+        await update.message.reply_text(b("Koi plan nahi hai abhi."), parse_mode=ParseMode.HTML)
+        return
+    keyboard = [
+        [InlineKeyboardButton(f"🗑 {p['channel']} — ₹{p['price']}", callback_data=f"rmp_{p['id']}")]
+        for p in plans
+    ]
+    keyboard.append([InlineKeyboardButton(u("❌ Cancel"), callback_data="rmp_cancel")])
+    await update.message.reply_text(
+        f"🗑 {b('Plan Remove Karo')}\n\n{b('Konsa plan remove karna hai?')}",
+        reply_markup=InlineKeyboardMarkup(keyboard),
+        parse_mode=ParseMode.HTML,
+    )
+
+async def rmp_select(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    if not is_admin(query.from_user):
+        return
+    pid  = query.data[len("rmp_"):]
+    plan = get_plan(pid)
+    if not plan:
+        await query.edit_message_text(b("Plan nahi mila."), parse_mode=ParseMode.HTML)
+        return
+    keyboard = [
+        [
+            InlineKeyboardButton(u("✅ Haan, Remove Karo"), callback_data=f"rmp_confirm_{pid}"),
+            InlineKeyboardButton(u("❌ Nahi"),              callback_data="rmp_cancel"),
+        ]
+    ]
+    await query.edit_message_text(
+        f"⚠️ {b('Confirm Karo')}\n\n"
+        f"Kya tum <b>{plan['channel']}</b> (₹{plan['price']}) ko remove karna chahte ho?\n\n"
+        f"{u('Ye action undo nahi hoga.')}",
+        reply_markup=InlineKeyboardMarkup(keyboard),
+        parse_mode=ParseMode.HTML,
+    )
+
+async def rmp_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    if not is_admin(query.from_user):
+        return
+    pid = query.data[len("rmp_confirm_"):]
+    plan = get_plan(pid)
+    if plan:
+        plans_col.delete_one({"id": pid})
+        await query.edit_message_text(
+            f"✅ {b(plan['channel'])} plan remove ho gaya.",
+            parse_mode=ParseMode.HTML,
+        )
+    else:
+        await query.edit_message_text(b("Plan nahi mila."), parse_mode=ParseMode.HTML)
+
+async def rmp_cancel_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    await query.edit_message_text(b("❌ Remove cancelled."), parse_mode=ParseMode.HTML)
+
 # ── Callback router ───────────────────────────────────────────────────────────
 async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     data = update.callback_query.data
-    if   data == "menu_plans":         await menu_plans(update, context)
-    elif data == "menu_mysubs":        await my_subscriptions(update, context)
-    elif data == "menu_support":       await support(update, context)
-    elif data == "menu_dev":           await developer(update, context)
-    elif data == "back_main":          await start(update, context)
-    elif data == "bc_confirm":         await bc_confirm(update, context)
-    elif data == "bc_cancel":          await bc_cancel(update, context)
-    elif data.startswith("showplan_"): await show_plan(update, context)
-    elif data.startswith("sample_"):   await sample_content(update, context)
-    elif data.startswith("buy_"):      await buy_plan(update, context)
-    elif data.startswith("rzp_"):      await pay_razorpay(update, context)
-    elif data.startswith("qr_"):       await pay_qr(update, context)
-    elif data.startswith("paid_"):     await i_have_paid(update, context)
+    if   data == "menu_plans":              await menu_plans(update, context)
+    elif data == "menu_mysubs":             await my_subscriptions(update, context)
+    elif data == "menu_support":            await support(update, context)
+    elif data == "menu_dev":               await developer(update, context)
+    elif data == "back_main":              await start(update, context)
+    elif data == "bc_confirm":             await bc_confirm(update, context)
+    elif data == "bc_cancel":              await bc_cancel(update, context)
+    elif data == "rmp_cancel":             await rmp_cancel_cb(update, context)
+    elif data.startswith("rmp_confirm_"):  await rmp_confirm(update, context)
+    elif data.startswith("rmp_"):          await rmp_select(update, context)
+    elif data.startswith("showplan_"):     await show_plan(update, context)
+    elif data.startswith("sample_"):       await sample_content(update, context)
+    elif data.startswith("buy_"):          await buy_plan(update, context)
+    elif data.startswith("rzp_"):          await pay_razorpay(update, context)
+    elif data.startswith("qr_"):           await pay_qr(update, context)
+    elif data.startswith("paid_"):         await i_have_paid(update, context)
 
 # ── Main ──────────────────────────────────────────────────────────────────────
 import asyncio
 
 def main():
     app = Application.builder().token(BOT_TOKEN).build()
-    app.add_handler(CommandHandler("start",     start))
-    app.add_handler(CommandHandler("stats",     cmd_stats))
-    app.add_handler(CommandHandler("broadcast", cmd_broadcast))
-    app.add_handler(CommandHandler("check",     cmd_check))
+
+    newplan_conv = ConversationHandler(
+        entry_points=[CommandHandler("newplan", np_start)],
+        states={
+            NP_NAME:    [MessageHandler(filters.TEXT & ~filters.COMMAND, np_got_name)],
+            NP_DESC:    [MessageHandler(filters.TEXT & ~filters.COMMAND, np_got_desc)],
+            NP_PRICE:   [MessageHandler(filters.TEXT & ~filters.COMMAND, np_got_price)],
+            NP_PAYDESC: [MessageHandler(filters.TEXT & ~filters.COMMAND, np_got_paydesc)],
+        },
+        fallbacks=[CommandHandler("cancel", np_cancel)],
+    )
+
+    app.add_handler(newplan_conv)
+    app.add_handler(CommandHandler("start",        start))
+    app.add_handler(CommandHandler("stats",        cmd_stats))
+    app.add_handler(CommandHandler("broadcast",    cmd_broadcast))
+    app.add_handler(CommandHandler("check",        cmd_check))
+    app.add_handler(CommandHandler("removeplan",   cmd_removeplan))
     app.add_handler(CallbackQueryHandler(handle_callback))
-    logger.info("Bot starting with MongoDB + broadcast + stats + check...")
+    logger.info("Bot starting with MongoDB + broadcast + stats + check + newplan + removeplan...")
     app.run_polling(drop_pending_updates=True)
 
 if __name__ == "__main__":
