@@ -369,10 +369,12 @@ async def show_plan(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await safe_edit(query, context, b("Plan not found. Please go back and try again."),
                         [[InlineKeyboardButton(u("🔙 Back"), callback_data="menu_plans")]])
         return
+    sample_link = plan.get("sample_link")
     keyboard = [
         [
-            InlineKeyboardButton(u("👁 View Sample Content"), callback_data=f"sample_{pid}"),
-            InlineKeyboardButton(u("📸 Payment Proof"),       url=PREMIUM_CHANNEL_LINK),
+            InlineKeyboardButton(u("👁 View Sample Content"), url=sample_link) if sample_link
+            else InlineKeyboardButton(u("👁 View Sample Content"), callback_data=f"sample_{pid}"),
+            InlineKeyboardButton(u("📸 Payment Proof"), url=PREMIUM_CHANNEL_LINK),
         ],
         [InlineKeyboardButton(f"₹{plan['price']} - " + u("Permanent"), callback_data=f"buy_{pid}")],
         [InlineKeyboardButton(u("🔙 Back"), callback_data="menu_plans")],
@@ -676,7 +678,7 @@ async def developer(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await safe_edit(query, context, msg, keyboard)
 
 # ── /newplan (admin) ──────────────────────────────────────────────────────────
-NP_NAME, NP_DESC, NP_PRICE, NP_PAYDESC, NP_LINK = range(5)
+NP_NAME, NP_DESC, NP_PRICE, NP_PAYDESC, NP_LINK, NP_SAMPLE = range(6)
 
 async def np_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_admin(update.effective_user):
@@ -743,11 +745,23 @@ async def np_got_paydesc(update: Update, context: ContextTypes.DEFAULT_TYPE):
     return NP_LINK
 
 async def np_got_link(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    channel_link = update.message.text.strip()
+    context.user_data["np_link"] = update.message.text.strip()
+    await update.message.reply_text(
+        f"✅ {b('Channel Link Saved.')}\n\n"
+        f"➕ {b('Step 6/6')} — {b('Send The Sample Content Link.')}\n"
+        f"{u('Users will be taken to this link when they click View Sample Content, e.g.')}\n"
+        f"<code>https://t.me/+xxxxxxxxxx</code>",
+        parse_mode=ParseMode.HTML,
+    )
+    return NP_SAMPLE
+
+async def np_got_sample(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    sample_link  = update.message.text.strip()
     name         = context.user_data["np_name"]
     desc         = context.user_data["np_desc"]
     price        = context.user_data["np_price"]
     pay_desc     = context.user_data["np_paydesc"]
+    channel_link = context.user_data["np_link"]
     pid          = uuid.uuid4().hex[:8]
 
     plans_col.insert_one({
@@ -757,6 +771,7 @@ async def np_got_link(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "price":           price,
         "pay_description": pay_desc,
         "channel_link":    channel_link,
+        "sample_link":     sample_link,
         "created_at":      datetime.now(timezone.utc),
     })
 
@@ -766,7 +781,8 @@ async def np_got_link(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"📌 {b('Name')}: {name}\n"
         f"💰 {b('Price')}: ₹{price}\n"
         f"📝 {b('Payment Description')}: {pay_desc}\n"
-        f"🔗 {b('Channel Link')}: {channel_link}",
+        f"🔗 {b('Channel Link')}: {channel_link}\n"
+        f"👁 {b('Sample Link')}: {sample_link}",
         parse_mode=ParseMode.HTML,
     )
     context.user_data.clear()
@@ -876,6 +892,7 @@ def main():
             NP_PRICE:   [MessageHandler(filters.TEXT & ~filters.COMMAND, np_got_price)],
             NP_PAYDESC: [MessageHandler(filters.TEXT & ~filters.COMMAND, np_got_paydesc)],
             NP_LINK:    [MessageHandler(filters.TEXT & ~filters.COMMAND, np_got_link)],
+            NP_SAMPLE:  [MessageHandler(filters.TEXT & ~filters.COMMAND, np_got_sample)],
         },
         fallbacks=[CommandHandler("cancel", np_cancel)],
     )
