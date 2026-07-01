@@ -73,7 +73,7 @@ if plans_col.count_documents({}) == 0:
     plans_col.insert_many(_SEED_PLANS)
 
 def get_all_plans():
-    return list(plans_col.find({}, {"_id": 0}))
+    return list(plans_col.find({}, {"_id": 0}).sort("created_at", -1))
 
 def get_plan(pid):
     return plans_col.find_one({"id": pid}, {"_id": 0})
@@ -681,13 +681,13 @@ NP_NAME, NP_DESC, NP_PRICE, NP_PAYDESC = range(4)
 
 async def np_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_admin(update.effective_user):
-        await update.message.reply_text(b("❌ Admin only command."), parse_mode=ParseMode.HTML)
+        await update.message.reply_text(b("❌ Admin Only Command."), parse_mode=ParseMode.HTML)
         return ConversationHandler.END
     context.user_data.clear()
     await update.message.reply_text(
         f"➕ {b('New Plan — Step 1/4')}\n\n"
-        f"Plan ka {b('naam')} bhejo — yahi button mein dikhega.\n\n"
-        f"{u('cancel karne ke liye /cancel bhejo')}",
+        f"{b('Send The Plan Name')} — {u('this will appear as the button text.')}\n\n"
+        f"{u('Send /cancel to stop.')}",
         parse_mode=ParseMode.HTML,
     )
     return NP_NAME
@@ -695,19 +695,18 @@ async def np_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def np_got_name(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data["np_name"] = update.message.text.strip()
     await update.message.reply_text(
-        f"✅ Naam: <b>{context.user_data['np_name']}</b>\n\n"
-        f"➕ {b('Step 2/4')} — Ab {b('description')} bhejo.\n"
-        f"Bold, spoiler, italic — jo bhi formatting chahiye waise bhejo, same to same save hoga.",
+        f"✅ {b('Name Saved')}: <b>{context.user_data['np_name']}</b>\n\n"
+        f"➕ {b('Step 2/4')} — {b('Send The Description.')}\n"
+        f"{u('Any formatting (bold, spoiler, italic) will be preserved exactly as sent.')}",
         parse_mode=ParseMode.HTML,
     )
     return NP_DESC
 
 async def np_got_desc(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    # Store HTML-formatted description to preserve all formatting
     context.user_data["np_desc"] = update.message.text_html
     await update.message.reply_text(
-        f"✅ Description save.\n\n"
-        f"➕ {b('Step 3/4')} — Ab {b('price')} bhejo (sirf number, jaise <code>299</code>).",
+        f"✅ {b('Description Saved.')}\n\n"
+        f"➕ {b('Step 3/4')} — {b('Send The Price')} {u('(number only, e.g.')} <code>299</code>{u(')')}",
         parse_mode=ParseMode.HTML,
     )
     return NP_PRICE
@@ -719,15 +718,15 @@ async def np_got_price(update: Update, context: ContextTypes.DEFAULT_TYPE):
             raise ValueError
     except ValueError:
         await update.message.reply_text(
-            f"❌ Sirf number dalo, jaise <code>299</code>. Dobara try karo:",
+            f"❌ {b('Invalid Price.')} {u('Send a number only, e.g.')} <code>299</code>",
             parse_mode=ParseMode.HTML,
         )
         return NP_PRICE
     context.user_data["np_price"] = price
     await update.message.reply_text(
-        f"✅ Price: ₹{price}\n\n"
-        f"➕ {b('Step 4/4')} — Ab {b('payment description')} bhejo.\n"
-        f"Ye Razorpay mein dikhta hai payment ke time, jaise:\n"
+        f"✅ {b('Price')}: ₹{price}\n\n"
+        f"➕ {b('Step 4/4')} — {b('Send The Payment Description.')}\n"
+        f"{u('This appears in Razorpay during payment, e.g.')}\n"
         f"<code>Subscription: HAWT PACK</code>",
         parse_mode=ParseMode.HTML,
     )
@@ -746,14 +745,15 @@ async def np_got_paydesc(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "description":     desc,
         "price":           price,
         "pay_description": pay_desc,
+        "created_at":      datetime.now(timezone.utc),
     })
 
     await update.message.reply_text(
-        f"✅ {b('Plan Successfully Add Ho Gaya!')} 🎉\n\n"
-        f"🆔 ID: <code>{pid}</code>\n"
-        f"📌 {b('Naam')}: {name}\n"
+        f"✅ {b('Plan Added Successfully!')} 🎉\n\n"
+        f"🆔 {b('ID')}: <code>{pid}</code>\n"
+        f"📌 {b('Name')}: {name}\n"
         f"💰 {b('Price')}: ₹{price}\n"
-        f"📝 {b('Pay Desc')}: {pay_desc}",
+        f"📝 {b('Payment Description')}: {pay_desc}",
         parse_mode=ParseMode.HTML,
     )
     context.user_data.clear()
@@ -761,17 +761,17 @@ async def np_got_paydesc(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def np_cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data.clear()
-    await update.message.reply_text(b("❌ New plan cancelled."), parse_mode=ParseMode.HTML)
+    await update.message.reply_text(b("❌ New Plan Cancelled."), parse_mode=ParseMode.HTML)
     return ConversationHandler.END
 
 # ── /removeplan (admin) ───────────────────────────────────────────────────────
 async def cmd_removeplan(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_admin(update.effective_user):
-        await update.message.reply_text(b("❌ Admin only command."), parse_mode=ParseMode.HTML)
+        await update.message.reply_text(b("❌ Admin Only Command."), parse_mode=ParseMode.HTML)
         return
     plans = get_all_plans()
     if not plans:
-        await update.message.reply_text(b("Koi plan nahi hai abhi."), parse_mode=ParseMode.HTML)
+        await update.message.reply_text(b("❌ No Plans Found."), parse_mode=ParseMode.HTML)
         return
     keyboard = [
         [InlineKeyboardButton(f"🗑 {p['channel']} — ₹{p['price']}", callback_data=f"rmp_{p['id']}")]
@@ -779,7 +779,7 @@ async def cmd_removeplan(update: Update, context: ContextTypes.DEFAULT_TYPE):
     ]
     keyboard.append([InlineKeyboardButton(u("❌ Cancel"), callback_data="rmp_cancel")])
     await update.message.reply_text(
-        f"🗑 {b('Plan Remove Karo')}\n\n{b('Konsa plan remove karna hai?')}",
+        f"🗑 {b('Remove Plan')}\n\n{b('Select The Plan You Want To Remove')} 👇",
         reply_markup=InlineKeyboardMarkup(keyboard),
         parse_mode=ParseMode.HTML,
     )
@@ -792,18 +792,18 @@ async def rmp_select(update: Update, context: ContextTypes.DEFAULT_TYPE):
     pid  = query.data[len("rmp_"):]
     plan = get_plan(pid)
     if not plan:
-        await query.edit_message_text(b("Plan nahi mila."), parse_mode=ParseMode.HTML)
+        await query.edit_message_text(b("❌ Plan Not Found."), parse_mode=ParseMode.HTML)
         return
     keyboard = [
         [
-            InlineKeyboardButton(u("✅ Haan, Remove Karo"), callback_data=f"rmp_confirm_{pid}"),
-            InlineKeyboardButton(u("❌ Nahi"),              callback_data="rmp_cancel"),
+            InlineKeyboardButton(u("✅ Yes, Remove It"), callback_data=f"rmp_confirm_{pid}"),
+            InlineKeyboardButton(u("❌ No, Cancel"),     callback_data="rmp_cancel"),
         ]
     ]
     await query.edit_message_text(
-        f"⚠️ {b('Confirm Karo')}\n\n"
-        f"Kya tum <b>{plan['channel']}</b> (₹{plan['price']}) ko remove karna chahte ho?\n\n"
-        f"{u('Ye action undo nahi hoga.')}",
+        f"⚠️ {b('Confirm Removal')}\n\n"
+        f"{b('Are You Sure You Want To Remove')} <b>{plan['channel']}</b> (₹{plan['price']})?\n\n"
+        f"{u('This action cannot be undone.')}",
         reply_markup=InlineKeyboardMarkup(keyboard),
         parse_mode=ParseMode.HTML,
     )
@@ -813,21 +813,21 @@ async def rmp_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.answer()
     if not is_admin(query.from_user):
         return
-    pid = query.data[len("rmp_confirm_"):]
+    pid  = query.data[len("rmp_confirm_"):]
     plan = get_plan(pid)
     if plan:
         plans_col.delete_one({"id": pid})
         await query.edit_message_text(
-            f"✅ {b(plan['channel'])} plan remove ho gaya.",
+            f"✅ {b(plan['channel'])} {u('has been removed successfully.')}",
             parse_mode=ParseMode.HTML,
         )
     else:
-        await query.edit_message_text(b("Plan nahi mila."), parse_mode=ParseMode.HTML)
+        await query.edit_message_text(b("❌ Plan Not Found."), parse_mode=ParseMode.HTML)
 
 async def rmp_cancel_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
-    await query.edit_message_text(b("❌ Remove cancelled."), parse_mode=ParseMode.HTML)
+    await query.edit_message_text(b("❌ Remove Cancelled."), parse_mode=ParseMode.HTML)
 
 # ── Callback router ───────────────────────────────────────────────────────────
 async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
