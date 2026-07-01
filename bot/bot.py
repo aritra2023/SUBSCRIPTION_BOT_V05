@@ -601,7 +601,6 @@ async def i_have_paid(update: Update, context: ContextTypes.DEFAULT_TYPE):
             msg = (
                 f"✅ {b('Payment Verified Successfully!')}\n\n"
                 f"🎉 {b('Welcome To')} {b(plan['channel'])}!\n\n"
-                f"🔑 {b('Token Timeout')}: 1 {b('days')}\n\n"
                 f"{b('Click The Button Below To Join Your Premium Channel')} 👇\n\n"
                 f"{b('If You Face Any Issue Contact')}: @{ADMIN_USERNAME}\n\n"
                 f"{b('Thank you for your purchase!')}"
