@@ -59,7 +59,6 @@ def b(text):
 
 # ── Plans ─────────────────────────────────────────────────────────────────────
 PLANS = [
-    {"id": "test",  "channel": "Test Plan - ₹1",                   "category": "TEST",       "price": 1},
     {"id": "hawt",  "channel": "Plan 1 - HAWT PACK",               "category": "SNAP PRIME", "price": 199},
     {"id": "desi",  "channel": "Plan 2 - DESI PACK",               "category": "SNAP PRIME", "price": 299},
     {"id": "snap",  "channel": "Plan 3 - OG SNAP PACK",            "category": "SNAP PRIME", "price": 399},
