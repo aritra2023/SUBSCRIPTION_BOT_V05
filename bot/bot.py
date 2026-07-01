@@ -102,9 +102,12 @@ async def show_plan(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.edit_message_text(f"{b('Plan not found. Please go back and try again.')}", parse_mode=ParseMode.HTML)
         return
     keyboard = [
-        [InlineKeyboardButton(u("👁 View Sample Content"),           callback_data=f"sample_{pid}")],
+        [
+            InlineKeyboardButton(u("👁 View Sample Content"), callback_data=f"sample_{pid}"),
+            InlineKeyboardButton(u("📸 Payment Proof"),       url=PREMIUM_CHANNEL_LINK),
+        ],
         [InlineKeyboardButton(f"₹{plan['price']} - " + u("Permanent"), callback_data=f"buy_{pid}")],
-        [InlineKeyboardButton(u("🔙 Back"),                          callback_data="menu_plans")],
+        [InlineKeyboardButton(u("🔙 Back"),                            callback_data="menu_plans")],
     ]
     msg = (
         f"📺 {b(plan['channel'])}\n"
