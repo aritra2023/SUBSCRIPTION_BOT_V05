@@ -145,7 +145,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"{b('Make Payment And Get Your Premium Link Right Now In Seconds')}\n\n"
         f"{b('Please Select The Premium You Want To Buy')} 👇"
     )
-    START_IMAGE = "https://files.catbox.moe/r1a1ok.png"
+    START_IMAGE = "https://files.catbox.moe/agw4x6.png"
     rm = InlineKeyboardMarkup(keyboard)
     if update.message:
         await update.message.reply_photo(photo=START_IMAGE, caption=msg, reply_markup=rm, parse_mode=ParseMode.HTML)
