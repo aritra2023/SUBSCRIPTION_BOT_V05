@@ -24,6 +24,7 @@ BOT_TOKEN = os.environ["TELEGRAM_BOT_TOKEN"]
 RAZORPAY_KEY_ID = os.environ["RAZORPAY_KEY_ID"]
 RAZORPAY_KEY_SECRET = os.environ["RAZORPAY_KEY_SECRET"]
 ADMIN_USERNAME = "@aritramahatma"
+PREMIUM_CHANNEL_LINK = "https://t.me/+K2hQ7Cdgm1Y3MjY1"
 
 razorpay_client = razorpay.Client(auth=(RAZORPAY_KEY_ID, RAZORPAY_KEY_SECRET))
 
@@ -277,13 +278,16 @@ async def i_have_paid(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     verified = True
 
         if verified:
-            keyboard = [[InlineKeyboardButton(u("🏠 Back to Main Menu"), callback_data="back_main")]]
+            keyboard = [
+                [InlineKeyboardButton(u("🔓 Join Premium Channel"), url=PREMIUM_CHANNEL_LINK)],
+                [InlineKeyboardButton(u("🏠 Back to Main Menu"),    callback_data="back_main")],
+            ]
             msg = (
                 f"✅ {b('Payment Verified Successfully!')}\n\n"
                 f"🎉 {b('Welcome To')} {b(plan['channel']) if plan else ''}!\n\n"
-                f"{b('Please contact admin to get your premium link')}:\n"
-                f"{ADMIN_USERNAME}\n\n"
                 f"🔑 {b('Token Timeout')}: 1 {b('days')}\n\n"
+                f"{b('Click The Button Below To Join Your Premium Channel')} 👇\n\n"
+                f"{b('If You Face Any Issue Contact')}:\n{ADMIN_USERNAME}\n\n"
                 f"{b('Thank you for your purchase!')}"
             )
             await query.edit_message_text(msg, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
