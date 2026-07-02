@@ -12,6 +12,7 @@ from handlers import (
     start, cmd_stats, cmd_broadcast, cmd_check, cmd_removeplan,
     bc_confirm, bc_cancel,
     handle_callback,
+    handle_payment_screenshot,
     np_start, np_got_name, np_got_desc, np_got_price,
     np_got_paydesc, np_got_link, np_got_sample, np_cancel,
     NP_NAME, NP_DESC, NP_PRICE, NP_PAYDESC, NP_LINK, NP_SAMPLE,
@@ -42,6 +43,7 @@ def main():
     app.add_handler(CommandHandler("broadcast",  cmd_broadcast))
     app.add_handler(CommandHandler("check",      cmd_check))
     app.add_handler(CommandHandler("removeplan", cmd_removeplan))
+    app.add_handler(MessageHandler(filters.PHOTO & ~filters.COMMAND, handle_payment_screenshot))
     app.add_handler(CallbackQueryHandler(handle_callback))
 
     logger.info("Bot starting...")

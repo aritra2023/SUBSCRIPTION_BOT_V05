@@ -14,7 +14,7 @@ def u(text):
         'q':'Q','r':'ʀ','s':'s','t':'ᴛ','u':'ᴜ','v':'ᴠ','w':'ᴡ','x':'x',
         'y':'ʏ','z':'ᴢ',
     }
-    return ''.join(SC.get(c, c) for c in text)
+    return ''.join(SC.get(c, c) for c in text.lower())
 
 def b(text):
     return f"<b>{u(text)}</b>"
