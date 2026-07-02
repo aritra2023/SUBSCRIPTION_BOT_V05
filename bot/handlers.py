@@ -329,12 +329,19 @@ async def pay_razorpay(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def pay_qr(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
-    await query.answer(u("Generating QR Code..."))
+    await query.answer()
     pid  = query.data[len("qr_"):]
     plan = get_plan(pid)
     if not plan:
         await safe_edit(query, context, b("Plan not found."), [])
         return
+
+    # Show loading screen while QR is being generated
+    await safe_edit(
+        query, context,
+        f"⏳ {b('Generating QR Code...')}\n\n{u('Please wait a moment.')}",
+        [],
+    )
 
     buf, qr_id, gen_ok = None, "", False
     try:
@@ -451,8 +458,11 @@ async def i_have_paid(update: Update, context: ContextTypes.DEFAULT_TYPE):
             raise ValueError("not_verified")
     except Exception as e:
         import logging; logging.getLogger(__name__).warning(f"Payment check: {e}")
+        retry_row = [InlineKeyboardButton(u("🔄 Try Again"), callback_data=f"paid_{pid}_{ptype}_")]
+        if ptype == "qr":
+            retry_row.append(InlineKeyboardButton(u("📱 Regenerate QR"), callback_data=f"qr_{pid}"))
         keyboard = [
-            [InlineKeyboardButton(u("🔄 Try Again Later"),   callback_data=f"paid_{pid}_{ptype}_")],
+            retry_row,
             [InlineKeyboardButton(u("🔙 Back to Main Menu"), callback_data="back_main")],
         ]
         msg = (
