@@ -425,31 +425,39 @@ async def i_have_paid(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if not stored_ref:
             raise ValueError("no_ref")
 
-        # ── QR: ask for screenshot, verify after ──────────────────────────────
-        if stored_type == "qr":
-            pending["awaiting_ss"] = True
-            await safe_edit(
-                query, context,
-                f"📸 {b('Send Payment Screenshot')}\n\n"
-                f"{b('Please send a screenshot of your completed payment in this chat.')}\n\n"
-                f"{b('We will verify and activate your subscription instantly.')} ✅",
-                [[InlineKeyboardButton(u("❌ Cancel"), callback_data=f"showplan_{pid}")]],
-            )
-            return
-
-        # ── Link: verify with Razorpay immediately ────────────────────────────
         await safe_edit(query, context, f"🔄 {b('Checking Payment...')}", [])
 
         verified = False
-        details = razorpay_client.payment_link.fetch(stored_ref)
-        if details.get("status") == "paid":
-            verified = True
+
+        if stored_type == "qr":
+            # ── QR: check via Razorpay QR payments API ────────────────────────
+            payments = razorpay_client.qrcode.fetch_all_payments(stored_ref)
+            for item in (payments.get("items") or []):
+                if item.get("status") == "captured":
+                    verified = True
+                    break
+        else:
+            # ── Link: check payment link status ───────────────────────────────
+            details = razorpay_client.payment_link.fetch(stored_ref)
+            if details.get("status") == "paid":
+                verified = True
 
         if verified and plan:
             pending_payments.pop(query.from_user.id, None)
             newly_inserted = record_payment(query.from_user.id, plan, stored_ref, stored_type)
             if not newly_inserted:
-                raise ValueError("already_recorded")
+                # Already recorded — still give them the link (idempotent grant)
+                keyboard = [
+                    [InlineKeyboardButton(u("🔓 Join Premium Channel"), url=plan.get("channel_link", PREMIUM_CHANNEL_LINK))],
+                    [InlineKeyboardButton(u("🏠 Back to Main Menu"),    callback_data="back_main")],
+                ]
+                await safe_edit(
+                    query, context,
+                    f"✅ {b('Payment Already Recorded')}\n\n"
+                    f"{b('Your subscription is active. Click below to join.')} 👇",
+                    keyboard,
+                )
+                return
             keyboard = [
                 [InlineKeyboardButton(u("🔓 Join Premium Channel"), url=plan.get("channel_link", PREMIUM_CHANNEL_LINK))],
                 [InlineKeyboardButton(u("🏠 Back to Main Menu"),    callback_data="back_main")],
@@ -466,114 +474,28 @@ async def i_have_paid(update: Update, context: ContextTypes.DEFAULT_TYPE):
             raise ValueError("not_verified")
     except Exception as e:
         import logging; logging.getLogger(__name__).warning(f"Payment check: {e}")
-        retry_row = [InlineKeyboardButton(u("🔄 Try Again"), callback_data=f"paid_{pid}_{ptype}_")]
         pending_info = pending_payments.get(query.from_user.id)
-        pay_url = pending_info.get("short_url", "") if pending_info else ""
-        if pay_url:
-            retry_row.append(InlineKeyboardButton(u("💳 Payment Page"), url=pay_url))
+        if ptype == "qr":
+            retry_row = [
+                InlineKeyboardButton(u("🔄 Try Again"),     callback_data=f"paid_{pid}_qr_"),
+                InlineKeyboardButton(u("📱 Regenerate QR"), callback_data=f"qr_{pid}"),
+            ]
+        else:
+            pay_url = pending_info.get("short_url", "") if pending_info else ""
+            retry_row = [InlineKeyboardButton(u("🔄 Try Again"), callback_data=f"paid_{pid}_link_")]
+            if pay_url:
+                retry_row.append(InlineKeyboardButton(u("💳 Payment Page"), url=pay_url))
         keyboard = [
             retry_row,
             [InlineKeyboardButton(u("🔙 Back to Main Menu"), callback_data="back_main")],
         ]
         msg = (
-            f"❌ {b('Error Checking Payment')}\n\n"
-            f"{b('We Couldn t Verify Your Payment At This Time')}\n"
+            f"❌ {b('Payment Not Verified Yet')}\n\n"
+            f"{b('We Couldn t Confirm Your Payment At This Time')}\n"
             f"{b('This Could Be Due To A Delay In The Payment System')}\n\n"
-            f"{b('Please Try Again In A Few Minutes Or Contact Support')} @{ADMIN_USERNAME}"
+            f"{b('Please Wait A Moment And Try Again Or Contact Support')} @{ADMIN_USERNAME}"
         )
         await safe_edit(query, context, msg, keyboard)
-
-# ── Payment screenshot handler (QR flow) ──────────────────────────────────────
-async def handle_payment_screenshot(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Receives QR payment screenshot, forwards to admin, verifies with Razorpay."""
-    import logging
-    log = logging.getLogger(__name__)
-    user    = update.effective_user
-    pending = pending_payments.get(user.id)
-
-    # Ignore if not awaiting a screenshot for a QR payment
-    if not pending or not pending.get("awaiting_ss") or pending.get("type") != "qr":
-        return
-
-    pending["awaiting_ss"] = False          # reset so Try Again re-asks cleanly
-    pid   = pending.get("pid", "")
-    qr_id = pending.get("ref_id", "")
-    plan  = get_plan(pid)
-
-    status_msg = await update.message.reply_text(
-        f"🔄 {b('Verifying your payment...')}",
-        parse_mode=ParseMode.HTML,
-    )
-
-    # Forward screenshot + details to every admin
-    for admin_id in ADMIN_IDS:
-        try:
-            name    = f"{user.first_name or ''} {user.last_name or ''}".strip()
-            caption = (
-                f"📸 Payment Screenshot\n\n"
-                f"👤 {name}" + (f" (@{user.username})" if user.username else "") + "\n"
-                f"🆔 ID: {user.id}\n"
-                f"📦 Plan: {plan['channel'] if plan else pid}\n"
-                f"💰 Amount: ₹{pending.get('amount', '?')}\n"
-                f"🔑 QR ID: {qr_id}"
-            )
-            await context.bot.forward_message(
-                chat_id=admin_id,
-                from_chat_id=update.message.chat_id,
-                message_id=update.message.message_id,
-            )
-            await context.bot.send_message(chat_id=admin_id, text=caption)
-        except Exception as e:
-            log.warning(f"Admin screenshot forward failed ({admin_id}): {e}")
-
-    # Verify with Razorpay
-    verified = False
-    try:
-        payments = razorpay_client.qrcode.fetch_all_payments(qr_id)
-        for item in (payments.get("items") or []):
-            if item.get("status") == "captured":
-                verified = True
-                break
-    except Exception as e:
-        log.error(f"QR verify error (screenshot flow): {e}")
-
-    if verified and plan:
-        pending_payments.pop(user.id, None)
-        newly_inserted = record_payment(user.id, plan, qr_id, "qr")
-        if not newly_inserted:
-            await status_msg.edit_text(
-                f"❌ {b('This payment was already recorded.')}\n{b('Contact admin')}: @{ADMIN_USERNAME}",
-                parse_mode=ParseMode.HTML,
-            )
-            return
-        keyboard = [
-            [InlineKeyboardButton(u("🔓 Join Premium Channel"), url=plan.get("channel_link", PREMIUM_CHANNEL_LINK))],
-            [InlineKeyboardButton(u("🏠 Back to Main Menu"),    callback_data="back_main")],
-        ]
-        await status_msg.edit_text(
-            f"✅ {b('Payment Verified Successfully!')}\n\n"
-            f"🎉 {b('Welcome To')} {b(plan['channel'])}!\n\n"
-            f"{b('Click The Button Below To Join Your Premium Channel')} 👇\n\n"
-            f"{b('If You Face Any Issue Contact')}: @{ADMIN_USERNAME}\n\n"
-            f"{b('Thank you for your purchase!')}",
-            reply_markup=InlineKeyboardMarkup(keyboard),
-            parse_mode=ParseMode.HTML,
-        )
-    else:
-        keyboard = [
-            [
-                InlineKeyboardButton(u("🔄 Try Again"),     callback_data=f"paid_{pid}_qr_"),
-                InlineKeyboardButton(u("📱 Regenerate QR"), callback_data=f"qr_{pid}"),
-            ],
-            [InlineKeyboardButton(u("🔙 Back to Main Menu"), callback_data="back_main")],
-        ]
-        await status_msg.edit_text(
-            f"❌ {b('Payment Not Verified Yet')}\n\n"
-            f"{b('We received your screenshot but the payment could not be confirmed.')}\n\n"
-            f"{b('Please wait a moment and try again, or contact support')} @{ADMIN_USERNAME}",
-            reply_markup=InlineKeyboardMarkup(keyboard),
-            parse_mode=ParseMode.HTML,
-        )
 
 # ── My Subscriptions / Support / Developer ────────────────────────────────────
 async def my_subscriptions(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -810,13 +732,6 @@ async def rmp_cancel_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     data = update.callback_query.data
     uid  = update.callback_query.from_user.id
-
-    # Any button press other than "I Have Paid" clears the screenshot-waiting flag
-    # so unrelated photos sent later don't accidentally trigger payment verification.
-    if not data.startswith("paid_"):
-        pending = pending_payments.get(uid)
-        if pending and pending.get("awaiting_ss"):
-            pending["awaiting_ss"] = False
 
     if   data == "menu_plans":             await menu_plans(update, context)
     elif data == "menu_mysubs":            await my_subscriptions(update, context)
