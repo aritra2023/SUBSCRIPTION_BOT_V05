@@ -1,4 +1,7 @@
 import asyncio
+import os
+import threading
+from http.server import BaseHTTPRequestHandler, HTTPServer
 from telegram.ext import (
     Application,
     CommandHandler,
@@ -20,7 +23,28 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+
+class _HealthHandler(BaseHTTPRequestHandler):
+    def do_GET(self):
+        self.send_response(200)
+        self.send_header("Content-Type", "text/plain")
+        self.end_headers()
+        self.wfile.write(b"OK")
+
+    def log_message(self, format, *args):
+        pass  # keep console clean, only bot logs matter
+
+
+def _start_health_server():
+    port = int(os.environ.get("PORT", "8000"))
+    server = HTTPServer(("0.0.0.0", port), _HealthHandler)
+    logger.info(f"Health check server listening on port {port}")
+    server.serve_forever()
+
+
 def main():
+    threading.Thread(target=_start_health_server, daemon=True).start()
+
     app = Application.builder().token(BOT_TOKEN).build()
 
     newplan_conv = ConversationHandler(
