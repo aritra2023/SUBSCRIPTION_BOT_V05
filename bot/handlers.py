@@ -337,12 +337,25 @@ async def pay_qr(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await safe_edit(query, context, b("Plan not found."), [])
         return
 
-    # Show loading screen while QR is being generated
-    await safe_edit(
-        query, context,
-        f"⏳ {b('Generating QR Code...')}\n\n{u('Please wait a moment.')}",
-        [],
-    )
+    # Animated loading while QR generates
+    _frames = [
+        f"⏳ {b('Generating QR')}",
+        f"⏳ {b('Generating QR')} ·",
+        f"⏳ {b('Generating QR')} · ·",
+        f"⏳ {b('Generating QR')} · · ·",
+    ]
+    await safe_edit(query, context, _frames[0], [])
+    _msg = query.message  # same chat/message id — safe to edit in loop
+
+    async def _animate():
+        for _i in range(1, 9999):
+            await asyncio.sleep(0.7)
+            try:
+                await _msg.edit_text(_frames[_i % len(_frames)], parse_mode=ParseMode.HTML)
+            except Exception:
+                pass
+
+    _anim = asyncio.create_task(_animate())
 
     buf, qr_id, gen_ok = None, "", False
     try:
@@ -369,6 +382,12 @@ async def pay_qr(update: Update, context: ContextTypes.DEFAULT_TYPE):
         gen_ok = True
     except Exception as e:
         import logging; logging.getLogger(__name__).error(f"QR generation failed: {e}")
+    finally:
+        _anim.cancel()
+        try:
+            await _anim
+        except asyncio.CancelledError:
+            pass
 
     if gen_ok and buf:
         pending_payments[query.from_user.id] = {
