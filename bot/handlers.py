@@ -270,7 +270,7 @@ async def buy_plan(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await safe_edit(query, context, b("Plan not found."), [])
         return
     keyboard = [
-        [InlineKeyboardButton(u("💳 Pay with Razorpay"), callback_data=f"rzp_{pid}")],
+        [InlineKeyboardButton(u("💳 UPI / CARDS"), callback_data=f"rzp_{pid}")],
         [InlineKeyboardButton(u("📱 Pay with QR"),        callback_data=f"qr_{pid}")],
         [InlineKeyboardButton(u("🔙 Back"),               callback_data=f"showplan_{pid}")],
     ]
@@ -306,6 +306,7 @@ async def pay_razorpay(update: Update, context: ContextTypes.DEFAULT_TYPE):
         pending_payments[query.from_user.id] = {
             "pid": pid, "type": "link", "ref_id": link_id,
             "amount": plan["price"], "timestamp": time.time(),
+            "short_url": short_url,
         }
         keyboard = [
             [InlineKeyboardButton(u("💳 Open Payment Page"), url=short_url)],
@@ -461,6 +462,11 @@ async def i_have_paid(update: Update, context: ContextTypes.DEFAULT_TYPE):
         retry_row = [InlineKeyboardButton(u("🔄 Try Again"), callback_data=f"paid_{pid}_{ptype}_")]
         if ptype == "qr":
             retry_row.append(InlineKeyboardButton(u("📱 Regenerate QR"), callback_data=f"qr_{pid}"))
+        elif ptype == "link":
+            pending_info = pending_payments.get(query.from_user.id)
+            pay_url = pending_info.get("short_url", "") if pending_info else ""
+            if pay_url:
+                retry_row.append(InlineKeyboardButton(u("💳 Payment Page"), url=pay_url))
         keyboard = [
             retry_row,
             [InlineKeyboardButton(u("🔙 Back to Main Menu"), callback_data="back_main")],
