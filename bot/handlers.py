@@ -22,10 +22,12 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     save_user(user)
     keyboard = [
-        [InlineKeyboardButton(u("Our Premium Subscription"),       callback_data="menu_plans")],
+        [InlineKeyboardButton(u("Available Subscription"),         callback_data="menu_plans")],
         [InlineKeyboardButton(u("Your Paid Subscriptions"),        callback_data="menu_mysubs")],
-        [InlineKeyboardButton(u("Want More Premium/Support Team"), callback_data="menu_support")],
-        [InlineKeyboardButton(u("Bot Developer/Creator") + " ↗",  callback_data="menu_dev")],
+        [
+            InlineKeyboardButton(u("Support"), callback_data="menu_support"),
+            InlineKeyboardButton(u("Creator") + " ↗", callback_data="menu_dev"),
+        ],
     ]
     msg = (
         f"{b('Hello Members Welcome To The Premium Channel Subscription Bot')} 🖥\n\n"
