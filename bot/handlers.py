@@ -217,7 +217,9 @@ async def menu_plans(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
     save_user(query.from_user)
-    keyboard = [[InlineKeyboardButton(u(p["channel"]), callback_data=f"showplan_{p['id']}")] for p in get_all_plans()]
+    plans = get_all_plans()
+    buttons = [InlineKeyboardButton(u(p["channel"]), callback_data=f"showplan_{p['id']}") for p in plans]
+    keyboard = [buttons[i:i + 2] for i in range(0, len(buttons), 2)]
     keyboard.append([InlineKeyboardButton(u("🔙 Back"), callback_data="back_main")])
     msg = f"📦 {b('Available Premium Channels')}\n\n{b('Select A Channel To View Subscription Plans')} 👇"
     await safe_edit(query, context, msg, keyboard)
