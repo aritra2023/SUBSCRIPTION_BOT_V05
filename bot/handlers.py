@@ -26,7 +26,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         [InlineKeyboardButton(u("Your Paid Subscriptions"),        callback_data="menu_mysubs")],
         [
             InlineKeyboardButton(u("Support"), callback_data="menu_support"),
-            InlineKeyboardButton(u("Creator") + " ↗", callback_data="menu_dev"),
+            InlineKeyboardButton(u("Creator"), callback_data="menu_dev"),
         ],
     ]
     msg = (
