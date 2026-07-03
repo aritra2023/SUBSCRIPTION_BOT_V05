@@ -11,6 +11,7 @@ from telegram.constants import ParseMode
 
 from config import (
     ADMIN_USERNAME, ADMIN_IDS, PREMIUM_CHANNEL_LINK,
+    CRYPTO_NETWORK, CRYPTO_ADDRESS,
     razorpay_client, users_col, pays_col, plans_col,
     pending_payments, pending_broadcasts,
     get_all_plans, get_plan,
@@ -272,10 +273,16 @@ async def buy_plan(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await safe_edit(query, context, b("Plan not found."), [])
         return
     keyboard = [
-        [InlineKeyboardButton(u("Razorpay [UPI/ CARDS]"), callback_data=f"rzp_{pid}")],
-        [InlineKeyboardButton(u("📱 Pay with QR"),        callback_data=f"qr_{pid}")],
-        [InlineKeyboardButton(u("🆘 Support"),            url=f"https://t.me/{ADMIN_USERNAME}")],
-        [InlineKeyboardButton(u("🔙 Back"),               callback_data=f"showplan_{pid}")],
+        [
+            InlineKeyboardButton(u("Razorpay [UPI/ CARDS]"), callback_data=f"rzp_{pid}"),
+            InlineKeyboardButton(u("Pay with QR"),            callback_data=f"qr_{pid}"),
+        ],
+        [
+            InlineKeyboardButton(u("Pay with Crypto"), callback_data=f"crypto_{pid}"),
+            InlineKeyboardButton(u("Coming Soon"),     callback_data="dummy_placeholder"),
+        ],
+        [InlineKeyboardButton(u("Support"), url=f"https://t.me/{ADMIN_USERNAME}")],
+        [InlineKeyboardButton(u("🔙 Back"), callback_data=f"showplan_{pid}")],
     ]
     msg = (
         f"{b('Choose your payment method')}:\n\n"
@@ -314,7 +321,7 @@ async def pay_razorpay(update: Update, context: ContextTypes.DEFAULT_TYPE):
         keyboard = [
             [InlineKeyboardButton(u("💳 Open Payment Page"), url=short_url)],
             [InlineKeyboardButton(u("✅ I Have Paid"),        callback_data=f"paid_{pid}_link_{link_id}")],
-            [InlineKeyboardButton(u("🆘 Support"),            url=f"https://t.me/{ADMIN_USERNAME}")],
+            [InlineKeyboardButton(u("Support"),            url=f"https://t.me/{ADMIN_USERNAME}")],
             [InlineKeyboardButton(u("❌ Cancel"),             callback_data=f"showplan_{pid}")],
         ]
         msg = (
@@ -331,7 +338,7 @@ async def pay_razorpay(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await safe_edit(query, context,
             f"❌ {b('Error creating payment. Please try again or contact support.')}\n@{ADMIN_USERNAME}",
             [
-                [InlineKeyboardButton(u("🆘 Support"), url=f"https://t.me/{ADMIN_USERNAME}")],
+                [InlineKeyboardButton(u("Support"), url=f"https://t.me/{ADMIN_USERNAME}")],
                 [InlineKeyboardButton(u("🔙 Back"), callback_data=f"buy_{pid}")],
             ])
 
@@ -403,7 +410,7 @@ async def pay_qr(update: Update, context: ContextTypes.DEFAULT_TYPE):
         }
         keyboard = [
             [InlineKeyboardButton(u("✅ I've Completed Payment"), callback_data=f"paid_{pid}_qr_{qr_id}")],
-            [InlineKeyboardButton(u("🆘 Support"),                url=f"https://t.me/{ADMIN_USERNAME}")],
+            [InlineKeyboardButton(u("Support"),                url=f"https://t.me/{ADMIN_USERNAME}")],
             [InlineKeyboardButton(u("❌ Cancel"),                 callback_data=f"showplan_{pid}")],
         ]
         caption = (
@@ -428,6 +435,35 @@ async def pay_qr(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
     else:
         await buy_plan(update, context)
+
+async def pay_crypto(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    pid  = query.data[len("crypto_"):]
+    plan = get_plan(pid)
+    if not plan:
+        await safe_edit(query, context, b("Plan not found."), [])
+        return
+    keyboard = [
+        [InlineKeyboardButton(u("Contact Admin"), url=f"https://t.me/{ADMIN_USERNAME}")],
+        [InlineKeyboardButton(u("🔙 Back"),        callback_data=f"buy_{pid}")],
+    ]
+    msg = (
+        f"{b('Pay With Crypto (USDT)')}\n\n"
+        f"{b('Channel')}: {b(plan['channel'])}\n"
+        f"{b('Plan')}: {b('Permanent')}\n"
+        f"{b('Amount')}: ₹{plan['price']}\n\n"
+        f"{b('Network')}: {b(CRYPTO_NETWORK)}\n"
+        f"{b('Wallet Address')}:\n<code>{CRYPTO_ADDRESS}</code>\n"
+        f"{b('Tap The Address Above To Copy It')}\n\n"
+        f"⚠️ {b('Please Double Check The Network And Wallet Address Before Sending. Sending To A Wrong Network Or Address May Result In Permanent Loss Of Funds')}\n\n"
+        f"{b('After Payment, Send The Screenshot Of Your Transaction To Admin')}"
+    )
+    await safe_edit(query, context, msg, keyboard)
+
+async def dummy_placeholder(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer(u("Coming soon!"), show_alert=True)
 
 async def i_have_paid(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
@@ -476,7 +512,7 @@ async def i_have_paid(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 # Already recorded — still give them the link (idempotent grant)
                 keyboard = [
                     [InlineKeyboardButton(u("🔓 Join Premium Channel"), url=plan.get("channel_link", PREMIUM_CHANNEL_LINK))],
-                    [InlineKeyboardButton(u("🆘 Support"),               url=f"https://t.me/{ADMIN_USERNAME}")],
+                    [InlineKeyboardButton(u("Support"),               url=f"https://t.me/{ADMIN_USERNAME}")],
                     [InlineKeyboardButton(u("🏠 Back to Main Menu"),    callback_data="back_main")],
                 ]
                 await safe_edit(
@@ -488,7 +524,7 @@ async def i_have_paid(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 return
             keyboard = [
                 [InlineKeyboardButton(u("🔓 Join Premium Channel"), url=plan.get("channel_link", PREMIUM_CHANNEL_LINK))],
-                [InlineKeyboardButton(u("🆘 Support"),               url=f"https://t.me/{ADMIN_USERNAME}")],
+                [InlineKeyboardButton(u("Support"),               url=f"https://t.me/{ADMIN_USERNAME}")],
                 [InlineKeyboardButton(u("🏠 Back to Main Menu"),    callback_data="back_main")],
             ]
             msg = (
@@ -516,7 +552,7 @@ async def i_have_paid(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 retry_row.append(InlineKeyboardButton(u("💳 Payment Page"), url=pay_url))
         keyboard = [
             retry_row,
-            [InlineKeyboardButton(u("🆘 Support"), url=f"https://t.me/{ADMIN_USERNAME}")],
+            [InlineKeyboardButton(u("Support"), url=f"https://t.me/{ADMIN_USERNAME}")],
             [InlineKeyboardButton(u("🔙 Back to Main Menu"), callback_data="back_main")],
         ]
         msg = (
@@ -778,4 +814,6 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif data.startswith("buy_"):         await buy_plan(update, context)
     elif data.startswith("rzp_"):         await pay_razorpay(update, context)
     elif data.startswith("qr_"):          await pay_qr(update, context)
+    elif data.startswith("crypto_"):      await pay_crypto(update, context)
+    elif data == "dummy_placeholder":     await dummy_placeholder(update, context)
     elif data.startswith("paid_"):        await i_have_paid(update, context)
