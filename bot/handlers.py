@@ -218,7 +218,6 @@ async def menu_plans(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.answer()
     save_user(query.from_user)
     keyboard = [[InlineKeyboardButton(u(p["channel"]), callback_data=f"showplan_{p['id']}")] for p in get_all_plans()]
-    keyboard.append([InlineKeyboardButton(u("Support"), url=f"https://t.me/{ADMIN_USERNAME}")])
     keyboard.append([InlineKeyboardButton(u("🔙 Back"), callback_data="back_main")])
     msg = f"📦 {b('Available Premium Channels')}\n\n{b('Select A Channel To View Subscription Plans')} 👇"
     await safe_edit(query, context, msg, keyboard)
@@ -240,7 +239,6 @@ async def show_plan(update: Update, context: ContextTypes.DEFAULT_TYPE):
             InlineKeyboardButton(u("📸 Payment Proof"), url=PREMIUM_CHANNEL_LINK),
         ],
         [InlineKeyboardButton(f"₹{plan['price']} - " + u("Permanent"), callback_data=f"buy_{pid}")],
-        [InlineKeyboardButton(u("Support"), url=f"https://t.me/{ADMIN_USERNAME}")],
         [InlineKeyboardButton(u("🔙 Back"), callback_data="menu_plans")],
     ]
     desc = plan.get("description", "")
@@ -258,10 +256,7 @@ async def sample_content(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.answer()
     pid  = query.data[len("sample_"):]
     plan = get_plan(pid)
-    keyboard = [
-        [InlineKeyboardButton(u("Support"), url=f"https://t.me/{ADMIN_USERNAME}")],
-        [InlineKeyboardButton(u("🔙 Back"), callback_data=f"showplan_{pid}")],
-    ]
+    keyboard = [[InlineKeyboardButton(u("🔙 Back"), callback_data=f"showplan_{pid}")]]
     msg = (
         f"🎬 {b('Sample Content Preview')}\n\n"
         f"{b('Channel')}: {b(plan['channel']) if plan else ''}\n\n"
@@ -592,10 +587,7 @@ async def my_subscriptions(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.answer()
     uid  = query.from_user.id
     pays = list(pays_col.find({"user_id": uid}, {"_id": 0, "plan_name": 1, "amount": 1, "paid_at": 1}))
-    keyboard = [
-        [InlineKeyboardButton(u("Support"), url=f"https://t.me/{ADMIN_USERNAME}")],
-        [InlineKeyboardButton(u("🔙 Back to Main Menu"), callback_data="back_main")],
-    ]
+    keyboard = [[InlineKeyboardButton(u("🔙 Back to Main Menu"), callback_data="back_main")]]
     if pays:
         lines = "\n".join(
             f"• {p['plan_name']} — ₹{p['amount']} ({p['paid_at'].strftime('%d %b %Y') if p.get('paid_at') else 'N/A'})"
