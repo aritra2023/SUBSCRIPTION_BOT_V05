@@ -322,8 +322,10 @@ async def pay_razorpay(update: Update, context: ContextTypes.DEFAULT_TYPE):
         keyboard = [
             [InlineKeyboardButton(u("💳 Open Payment Page"), url=short_url)],
             [InlineKeyboardButton(u("✅ I Have Paid"),        callback_data=f"paid_{pid}_link_{link_id}")],
-            [InlineKeyboardButton(u("Support"),            url=f"https://t.me/{ADMIN_USERNAME}")],
-            [InlineKeyboardButton(u("❌ Cancel"),             callback_data=f"showplan_{pid}")],
+            [
+                InlineKeyboardButton(u("Support"), url=f"https://t.me/{ADMIN_USERNAME}"),
+                InlineKeyboardButton(u("❌ Cancel"), callback_data=f"showplan_{pid}"),
+            ],
         ]
         msg = (
             f"💳 {b('Razorpay Payment')}\n\n"
@@ -411,8 +413,10 @@ async def pay_qr(update: Update, context: ContextTypes.DEFAULT_TYPE):
         }
         keyboard = [
             [InlineKeyboardButton(u("✅ I've Completed Payment"), callback_data=f"paid_{pid}_qr_{qr_id}")],
-            [InlineKeyboardButton(u("Support"),                url=f"https://t.me/{ADMIN_USERNAME}")],
-            [InlineKeyboardButton(u("❌ Cancel"),                 callback_data=f"showplan_{pid}")],
+            [
+                InlineKeyboardButton(u("Support"), url=f"https://t.me/{ADMIN_USERNAME}"),
+                InlineKeyboardButton(u("❌ Cancel"), callback_data=f"showplan_{pid}"),
+            ],
         ]
         caption = (
             f"📱 {b('Upi Payment Information')}\n\n"
