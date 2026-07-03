@@ -474,8 +474,8 @@ async def pay_crypto(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"{b('Network')}: {b(CRYPTO_NETWORK)}\n"
         f"{b('Wallet Address')}:\n<code>{CRYPTO_ADDRESS}</code>\n"
         f"{b('Tap The Address Above To Copy It')}\n\n"
-        f"⚠️ {b('Please Double Check The Network And Wallet Address Before Sending. Sending To A Wrong Network Or Address May Result In Permanent Loss Of Funds')}\n\n"
-        f"{b('After Payment, Send The Screenshot Of Your Transaction To Admin')}"
+        f"<blockquote>⚠️ {b('Please Double Check The Network And Wallet Address Before Sending. Sending To A Wrong Network Or Address May Result In Permanent Loss Of Funds')}\n\n"
+        f"{b('After Payment, Send The Screenshot Of Your Transaction To Admin')}</blockquote>"
     )
     await safe_edit(query, context, msg, keyboard)
 
