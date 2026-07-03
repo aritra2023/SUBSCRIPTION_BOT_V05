@@ -1,5 +1,6 @@
 import asyncio
 import io
+import json
 import time
 import uuid
 import urllib.request
@@ -436,6 +437,12 @@ async def pay_qr(update: Update, context: ContextTypes.DEFAULT_TYPE):
     else:
         await buy_plan(update, context)
 
+def get_usdt_inr_rate():
+    url = "https://api.coingecko.com/api/v3/simple/price?ids=tether&vs_currencies=inr"
+    with urllib.request.urlopen(url, timeout=6) as resp:
+        data = json.loads(resp.read().decode())
+    return float(data["tether"]["inr"])
+
 async def pay_crypto(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
@@ -444,6 +451,17 @@ async def pay_crypto(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not plan:
         await safe_edit(query, context, b("Plan not found."), [])
         return
+
+    await safe_edit(query, context, f"⏳ {b('Fetching Live Rate...')}", [])
+
+    try:
+        rate        = get_usdt_inr_rate()
+        usdt_amount = plan["price"] / rate
+        amount_line = f"{b('Amount')}: {usdt_amount:.2f} USDT  (₹{plan['price']} @ ₹{rate:.2f}/USDT)"
+    except Exception as e:
+        import logging; logging.getLogger(__name__).error(f"USDT rate fetch failed: {e}")
+        amount_line = f"{b('Amount')}: ₹{plan['price']} {b('(Live Rate Unavailable, Contact Admin For USDT Amount)')}"
+
     keyboard = [
         [InlineKeyboardButton(u("Contact Admin"), url=f"https://t.me/{ADMIN_USERNAME}")],
         [InlineKeyboardButton(u("🔙 Back"),        callback_data=f"buy_{pid}")],
@@ -452,7 +470,7 @@ async def pay_crypto(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"{b('Pay With Crypto (USDT)')}\n\n"
         f"{b('Channel')}: {b(plan['channel'])}\n"
         f"{b('Plan')}: {b('Permanent')}\n"
-        f"{b('Amount')}: ₹{plan['price']}\n\n"
+        f"{amount_line}\n\n"
         f"{b('Network')}: {b(CRYPTO_NETWORK)}\n"
         f"{b('Wallet Address')}:\n<code>{CRYPTO_ADDRESS}</code>\n"
         f"{b('Tap The Address Above To Copy It')}\n\n"
