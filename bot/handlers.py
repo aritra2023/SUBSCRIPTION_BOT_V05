@@ -12,7 +12,8 @@ from telegram.ext import ContextTypes, ConversationHandler
 from telegram.constants import ParseMode
 
 from config import (
-    ADMIN_USERNAME, ADMIN_IDS, PREMIUM_CHANNEL_LINK, FREE_CHANNEL_LINK,
+    ADMIN_USERNAME, ADMIN_IDS, SUPPORT_USERNAME, DEV_USERNAME,
+    PREMIUM_CHANNEL_LINK, FREE_CHANNEL_LINK,
     CRYPTO_NETWORK, CRYPTO_ADDRESS,
     razorpay_client, users_col, pays_col, plans_col,
     pending_payments, pending_recharges, pending_broadcasts,
@@ -33,11 +34,12 @@ BTN_SUBS    = "🛍️ Available Subscriptions"
 BTN_TOPUP   = "💳 Top Up"
 BTN_HOWTOBUY= "❓ How to Buy"
 BTN_FREE    = "🆓 Free Channel"
+BTN_SUPPORT = "💬 Support"
 
-REPLY_KB_TEXTS = {BTN_SUBS, BTN_TOPUP, BTN_HOWTOBUY, BTN_FREE}
+REPLY_KB_TEXTS = {BTN_SUBS, BTN_TOPUP, BTN_HOWTOBUY, BTN_FREE, BTN_SUPPORT}
 
 MAIN_KEYBOARD = ReplyKeyboardMarkup(
-    [[BTN_SUBS, BTN_TOPUP], [BTN_HOWTOBUY, BTN_FREE]],
+    [[BTN_SUBS, BTN_TOPUP], [BTN_HOWTOBUY, BTN_FREE], [BTN_SUPPORT]],
     resize_keyboard=True,
     is_persistent=True,
 )
@@ -92,20 +94,22 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         ],
     ]
     if update.message:
+        # First /start for new users: set the persistent bottom keyboard
+        if is_new:
+            kb_msg = await update.message.reply_text("👋", reply_markup=MAIN_KEYBOARD)
+            try:
+                await kb_msg.delete()
+            except Exception:
+                pass
         await update.message.reply_text(
             msg,
-            reply_markup=MAIN_KEYBOARD,
-            parse_mode=ParseMode.HTML,
-        )
-        await update.message.reply_text(
-            f"🔹 {b('Quick Links')} 👇",
             reply_markup=InlineKeyboardMarkup(inline),
             parse_mode=ParseMode.HTML,
         )
     else:
         await safe_edit(
             update.callback_query, context,
-            f"🏠 {b('Home')}\n\n{b('Use the bottom buttons to navigate')} 👇",
+            msg,
             inline,
         )
 
@@ -395,7 +399,7 @@ async def sample_content(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"🌟 {b('Sample Content Preview')}\n\n"
         f"{b('Channel')}: {b(plan['channel']) if plan else ''}\n\n"
         f"{b('This Is A Premium Channel. Subscribe To Get Full Access To Exclusive Content.')}\n\n"
-        f"{b('Contact Admin To Get A Sample')}: @{ADMIN_USERNAME}"
+        f"{b('Contact Admin To Get A Sample')}: @{SUPPORT_USERNAME}"
     )
     await safe_edit(query, context, msg, keyboard)
 
@@ -420,7 +424,7 @@ async def buy_plan(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 callback_data=f"wpay_{pid}"
             )],
             [InlineKeyboardButton(u("💳 Recharge Wallet"), callback_data="menu_wallet")],
-            [InlineKeyboardButton(u("💬 Support"), url=f"https://t.me/{ADMIN_USERNAME}")],
+            [InlineKeyboardButton(u("💬 Support"), url=f"https://t.me/{SUPPORT_USERNAME}")],
             [InlineKeyboardButton(u("🔙 Back"), callback_data=f"showplan_{pid}")],
         ]
         msg = (
@@ -438,7 +442,7 @@ async def buy_plan(update: Update, context: ContextTypes.DEFAULT_TYPE):
         need = price - total
         keyboard = [
             [InlineKeyboardButton(u("💳 Recharge Wallet"), callback_data="menu_wallet")],
-            [InlineKeyboardButton(u("💬 Support"), url=f"https://t.me/{ADMIN_USERNAME}")],
+            [InlineKeyboardButton(u("💬 Support"), url=f"https://t.me/{SUPPORT_USERNAME}")],
             [InlineKeyboardButton(u("🔙 Back"), callback_data=f"showplan_{pid}")],
         ]
         msg = (
@@ -481,7 +485,7 @@ async def wallet_pay_plan(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     keyboard = [
         [InlineKeyboardButton(u("🔑 Join Premium Channel"), url=plan.get("channel_link", PREMIUM_CHANNEL_LINK))],
-        [InlineKeyboardButton(u("💬 Support"),              url=f"https://t.me/{ADMIN_USERNAME}")],
+        [InlineKeyboardButton(u("💬 Support"),              url=f"https://t.me/{SUPPORT_USERNAME}")],
         [InlineKeyboardButton(u("🔙 Main Menu"),            callback_data="back_main")],
     ]
     wb, rb = get_wallet(query.from_user.id)
@@ -491,7 +495,7 @@ async def wallet_pay_plan(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"Rs.{plan['price']} {b('Deducted From Your Wallet')}\n"
         f"{b('Remaining Balance')}: Rs.{wb + rb}\n\n"
         f"{b('Click The Button Below To Join Your Premium Channel')} 👇\n\n"
-        f"{b('If You Face Any Issue Contact')}: @{ADMIN_USERNAME}"
+        f"{b('If You Face Any Issue Contact')}: @{SUPPORT_USERNAME}"
     )
     await safe_edit(query, context, msg, keyboard)
 
@@ -581,7 +585,7 @@ async def handle_custom_recharge_input(update: Update, context: ContextTypes.DEF
             InlineKeyboardButton(u("Pay with Crypto"), callback_data=f"wcrypto_{amt}"),
             InlineKeyboardButton(u("Coming Soon"),     callback_data="dummy_placeholder"),
         ],
-        [InlineKeyboardButton(u("💬 Support"), url=f"https://t.me/{ADMIN_USERNAME}")],
+        [InlineKeyboardButton(u("💬 Support"), url=f"https://t.me/{SUPPORT_USERNAME}")],
         [InlineKeyboardButton(u("🔙 Back"), callback_data="menu_wallet")],
     ]
     await update.message.reply_text(
@@ -607,7 +611,7 @@ async def wallet_amount_selected(update: Update, context: ContextTypes.DEFAULT_T
             InlineKeyboardButton(u("Pay with Crypto"), callback_data=f"wcrypto_{amt}"),
             InlineKeyboardButton(u("Coming Soon"),     callback_data="dummy_placeholder"),
         ],
-        [InlineKeyboardButton(u("💬 Support"), url=f"https://t.me/{ADMIN_USERNAME}")],
+        [InlineKeyboardButton(u("💬 Support"), url=f"https://t.me/{SUPPORT_USERNAME}")],
         [InlineKeyboardButton(u("🔙 Back"), callback_data="menu_wallet")],
     ]
     msg = (
@@ -644,7 +648,7 @@ async def wallet_pay_razorpay(update: Update, context: ContextTypes.DEFAULT_TYPE
             [InlineKeyboardButton(u("▶️ Open Payment Page"), url=short_url)],
             [InlineKeyboardButton(u("✅ I Have Paid"),       callback_data=f"wdone_link_{link_id}_{amt}")],
             [
-                InlineKeyboardButton(u("💬 Support"), url=f"https://t.me/{ADMIN_USERNAME}"),
+                InlineKeyboardButton(u("💬 Support"), url=f"https://t.me/{SUPPORT_USERNAME}"),
                 InlineKeyboardButton(u("❌ Cancel"),  callback_data="menu_wallet"),
             ],
         ]
@@ -658,9 +662,9 @@ async def wallet_pay_razorpay(update: Update, context: ContextTypes.DEFAULT_TYPE
     except Exception as e:
         logger.error(f"Wallet Razorpay link error: {e}")
         await safe_edit(query, context,
-            f"❌ {b('Error creating payment. Please try again or contact support.')}\n@{ADMIN_USERNAME}",
+            f"❌ {b('Error creating payment. Please try again or contact support.')}\n@{SUPPORT_USERNAME}",
             [
-                [InlineKeyboardButton(u("💬 Support"), url=f"https://t.me/{ADMIN_USERNAME}")],
+                [InlineKeyboardButton(u("💬 Support"), url=f"https://t.me/{SUPPORT_USERNAME}")],
                 [InlineKeyboardButton(u("🔙 Back"), callback_data=f"wamt_{amt}")],
             ])
 
@@ -727,7 +731,7 @@ async def wallet_pay_qr(update: Update, context: ContextTypes.DEFAULT_TYPE):
         keyboard = [
             [InlineKeyboardButton(u("✅ I've Completed Payment"), callback_data=f"wdone_qr_{qr_id}_{amt}")],
             [
-                InlineKeyboardButton(u("💬 Support"), url=f"https://t.me/{ADMIN_USERNAME}"),
+                InlineKeyboardButton(u("💬 Support"), url=f"https://t.me/{SUPPORT_USERNAME}"),
                 InlineKeyboardButton(u("❌ Cancel"),  callback_data="menu_wallet"),
             ],
         ]
@@ -774,7 +778,7 @@ async def wallet_pay_crypto(update: Update, context: ContextTypes.DEFAULT_TYPE):
         amount_line = f"{b('Amount')}: Rs.{amt} {b('(Live Rate Unavailable, Contact Admin For USDT Amount)')}"
 
     keyboard = [
-        [InlineKeyboardButton(u("💬 Contact Admin"), url=f"https://t.me/{ADMIN_USERNAME}")],
+        [InlineKeyboardButton(u("💬 Contact Admin"), url=f"https://t.me/{SUPPORT_USERNAME}")],
         [InlineKeyboardButton(u("🔙 Back"),           callback_data=f"wamt_{amt}")],
     ]
     msg = (
@@ -871,14 +875,14 @@ async def wallet_done(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         keyboard = [
             retry_row,
-            [InlineKeyboardButton(u("💬 Support"), url=f"https://t.me/{ADMIN_USERNAME}")],
+            [InlineKeyboardButton(u("💬 Support"), url=f"https://t.me/{SUPPORT_USERNAME}")],
             [InlineKeyboardButton(u("🔙 Back"),    callback_data="menu_wallet")],
         ]
         msg = (
             f"❌ {b('Payment Not Verified Yet')}\n\n"
             f"{b('We Could Not Confirm Your Payment At This Time')}\n"
             f"{b('This Could Be Due To A Delay In The Payment System')}\n\n"
-            f"{b('Please Wait A Moment And Try Again Or Contact Support')} @{ADMIN_USERNAME}"
+            f"{b('Please Wait A Moment And Try Again Or Contact Support')} @{SUPPORT_USERNAME}"
         )
         await safe_edit(query, context, msg, keyboard)
 
@@ -917,7 +921,7 @@ async def support(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
     keyboard = [
-        [InlineKeyboardButton(u("💬 Contact Admin"),  url=f"https://t.me/{ADMIN_USERNAME}")],
+        [InlineKeyboardButton(u("💬 Contact Admin"),  url=f"https://t.me/{SUPPORT_USERNAME}")],
         [InlineKeyboardButton(u("🔙 Main Menu"), callback_data="back_main")],
     ]
     msg = (
@@ -927,7 +931,7 @@ async def support(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"  {b('To Subscribe')}: {b('Recharge Wallet Then Select Premium Subscription')}\n"
         f"  {b('Payment Issues')}: {b('Contact Our Admin Directly')}\n"
         f"  {b('Access Problems')}: {b('Contact Our Admin With Your Subscription Details')}\n\n"
-        f"{b('Our Support Admin')}: @{ADMIN_USERNAME}"
+        f"{b('Our Support Admin')}: @{SUPPORT_USERNAME}"
     )
     await safe_edit(query, context, msg, keyboard)
 
@@ -935,12 +939,12 @@ async def developer(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
     keyboard = [
-        [InlineKeyboardButton(u("💬 Contact Developer"), url=f"https://t.me/{ADMIN_USERNAME}")],
+        [InlineKeyboardButton(u("💬 Contact Developer"), url=f"https://t.me/{DEV_USERNAME}")],
         [InlineKeyboardButton(u("🔙 Main Menu"),          callback_data="back_main")],
     ]
     msg = (
         f"🌟 {b('Bot Developer / Creator')}\n\n"
-        f"{b('This Bot Was Developed By')}: @{ADMIN_USERNAME}\n\n"
+        f"{b('This Bot Was Developed By')}: @{DEV_USERNAME}\n\n"
         f"{b('For Bot Related Queries Or Custom Bot Development Contact The Developer')}"
     )
     await safe_edit(query, context, msg, keyboard)
@@ -1139,7 +1143,7 @@ async def how_to_buy(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"     Tap Pay From Wallet → access granted instantly\n\n"
         f"4️⃣  {b('Join The Channel')}\n"
         f"     Click the invite link sent after successful payment\n\n"
-        f"💬 {b('Need Help?')} Contact: @{ADMIN_USERNAME}"
+        f"💬 {b('Need Help?')} Contact: @{SUPPORT_USERNAME}"
     )
     if update.callback_query:
         await update.callback_query.answer()
@@ -1212,6 +1216,16 @@ async def handle_reply_keyboard(update: Update, context: ContextTypes.DEFAULT_TY
 
     elif text == BTN_FREE:
         await free_channel(update, context)
+
+    elif text == BTN_SUPPORT:
+        keyboard = [[InlineKeyboardButton(u("💬 Contact Support"), url=f"https://t.me/{SUPPORT_USERNAME}")]]
+        await update.message.reply_text(
+            f"💬 {b('Help & Support')}\n\n"
+            f"{b('If you have any questions or need assistance, contact our support admin directly')}\n\n"
+            f"👤 {b('Support')}: @{SUPPORT_USERNAME}",
+            reply_markup=InlineKeyboardMarkup(keyboard),
+            parse_mode=ParseMode.HTML,
+        )
 
 # ── Callback router ────────────────────────────────────────────────────────────
 async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
