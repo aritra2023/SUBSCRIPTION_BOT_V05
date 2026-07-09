@@ -98,11 +98,10 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # Ensure the persistent bottom keyboard is always (re)shown on /start,
         # not just for brand-new users — otherwise it can disappear if the
         # user's client clears it (e.g. after opening another bot/chat).
-        kb_msg = await update.message.reply_text("👋", reply_markup=MAIN_KEYBOARD)
-        try:
-            await kb_msg.delete()
-        except Exception:
-            pass
+        # NOTE: we deliberately do NOT delete this message — deleting the
+        # message that attached the ReplyKeyboardMarkup causes some Telegram
+        # clients to immediately drop the keyboard again.
+        await update.message.reply_text("👋 Welcome back!", reply_markup=MAIN_KEYBOARD)
         await update.message.reply_text(
             msg,
             reply_markup=InlineKeyboardMarkup(inline),
