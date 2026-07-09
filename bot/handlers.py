@@ -31,11 +31,11 @@ logger = logging.getLogger(__name__)
 RECHARGE_AMOUNTS = [25, 50, 100]
 
 # ── Persistent bottom keyboard ─────────────────────────────────────────────────
-BTN_SUBS    = "Available Subscriptions"
-BTN_TOPUP   = "Top Up"
-BTN_HOWTOBUY= "How to Buy"
-BTN_FREE    = "Free Channel"
-BTN_SUPPORT = "Support"
+BTN_SUBS    = "🛍️ Available Subscriptions"
+BTN_TOPUP   = "💳 Top Up"
+BTN_HOWTOBUY= "❓ How to Buy"
+BTN_FREE    = "🆓 Free Channel"
+BTN_SUPPORT = "💬 Support"
 
 REPLY_KB_TEXTS = {BTN_SUBS, BTN_TOPUP, BTN_HOWTOBUY, BTN_FREE, BTN_SUPPORT}
 
@@ -101,7 +101,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # NOTE: we deliberately do NOT delete this message — deleting the
         # message that attached the ReplyKeyboardMarkup causes some Telegram
         # clients to immediately drop the keyboard again.
-        await update.message.reply_text("👋 Welcome back!", reply_markup=MAIN_KEYBOARD)
+        await update.message.reply_text("\u2063", reply_markup=MAIN_KEYBOARD)
         await update.message.reply_text(
             msg,
             reply_markup=InlineKeyboardMarkup(inline),
