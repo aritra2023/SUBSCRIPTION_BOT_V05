@@ -18,6 +18,7 @@ MONGODB_URI          = os.environ["MONGODB_URI"]
 ADMIN_USERNAME       = "aritramahatma"
 ADMIN_IDS            = {7342290214}
 PREMIUM_CHANNEL_LINK = "https://t.me/+K2hQ7Cdgm1Y3MjY1"
+FREE_CHANNEL_LINK    = "https://t.me/+K2hQ7Cdgm1Y3MjY1"   # update to your free channel
 CRYPTO_NETWORK       = "BNB Smart Chain (BEP20)"
 CRYPTO_ADDRESS       = "0x2c191f92fad334dc3c650e8a315bd1a4b4c77781"
 

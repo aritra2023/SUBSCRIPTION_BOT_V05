@@ -15,6 +15,8 @@ from handlers import (
     start, cmd_stats, cmd_broadcast, cmd_check, cmd_removeplan,
     bc_confirm, bc_cancel,
     handle_callback, handle_custom_recharge_input,
+    handle_reply_keyboard, how_to_buy, free_channel,
+    REPLY_KB_TEXTS,
     np_start, np_got_name, np_got_desc, np_got_price,
     np_got_paydesc, np_got_link, np_got_sample, np_cancel,
     NP_NAME, NP_DESC, NP_PRICE, NP_PAYDESC, NP_LINK, NP_SAMPLE,
@@ -62,6 +64,13 @@ def main():
 
     app.add_handler(newplan_conv)
     app.add_handler(CommandHandler("start",      start))
+    # reply-keyboard buttons must be checked before the custom-recharge text handler
+    app.add_handler(MessageHandler(
+        filters.TEXT & ~filters.COMMAND & filters.Regex(
+            "^(" + "|".join(t.replace(".", r"\.") for t in REPLY_KB_TEXTS) + ")$"
+        ),
+        handle_reply_keyboard,
+    ))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_custom_recharge_input))
     app.add_handler(CommandHandler("stats",      cmd_stats))
     app.add_handler(CommandHandler("broadcast",  cmd_broadcast))
