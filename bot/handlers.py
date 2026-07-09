@@ -87,7 +87,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # ── /stats (admin) ─────────────────────────────────────────────────────────────
 async def cmd_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_admin(update.effective_user):
-        await update.message.reply_text(b("✗ Admin only command."), parse_mode=ParseMode.HTML)
+        await update.message.reply_text(b("❌ Admin only command."), parse_mode=ParseMode.HTML)
         return
     total_users    = users_col.count_documents({})
     total_payments = pays_col.count_documents({})
@@ -100,14 +100,14 @@ async def cmd_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
         {"$sort": {"count": -1}},
     ]))
     lines = "\n".join(
-        f"  ✦ {b(r['_id'])}: {r['count']} {u('sales')} (Rs.{r['amount']})"
+        f"  {b(r['_id'])}: {r['count']} {u('sales')} (Rs.{r['amount']})"
         for r in breakdown
     )
     msg = (
         f"◉ {b('Bot Statistics')}\n\n"
-        f"✦ {b('Total Users')}: {total_users}\n"
-        f"✦ {b('Total Payments')}: {total_payments}\n"
-        f"✦ {b('Total Revenue')}: Rs.{revenue}\n\n"
+        f"{b('Total Users')}: {total_users}\n"
+        f"{b('Total Payments')}: {total_payments}\n"
+        f"{b('Total Revenue')}: Rs.{revenue}\n\n"
         f"★ {b('Sales by Plan')}:\n{lines or b('No sales yet')}"
     )
     await update.message.reply_text(msg, parse_mode=ParseMode.HTML)
@@ -115,7 +115,7 @@ async def cmd_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # ── /broadcast (admin) ─────────────────────────────────────────────────────────
 async def cmd_broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_admin(update.effective_user):
-        await update.message.reply_text(b("✗ Admin only command."), parse_mode=ParseMode.HTML)
+        await update.message.reply_text(b("❌ Admin only command."), parse_mode=ParseMode.HTML)
         return
     if not update.message.reply_to_message:
         await update.message.reply_text(
@@ -129,8 +129,8 @@ async def cmd_broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "message_id": src.message_id,
     }
     keyboard = [[
-        InlineKeyboardButton(u("✔ Confirm"), callback_data="bc_confirm"),
-        InlineKeyboardButton(u("✗ Cancel"),  callback_data="bc_cancel"),
+        InlineKeyboardButton(u("✅ Confirm"), callback_data="bc_confirm"),
+        InlineKeyboardButton(u("❌ Cancel"),  callback_data="bc_cancel"),
     ]]
     preview = (src.caption or src.text or u("(media/file)"))[:200]
     await update.message.reply_text(
@@ -177,9 +177,9 @@ async def bc_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 pass
         await asyncio.sleep(0.05)
     await status_msg.edit_text(
-        f"✔ {b('Broadcast Complete')}\n\n"
-        f"✔ {b('Sent')}: {success}\n"
-        f"✗ {b('Failed')}: {fail}",
+        f"✅ {b('Broadcast Complete')}\n\n"
+        f"✅ {b('Sent')}: {success}\n"
+        f"❌ {b('Failed')}: {fail}",
         parse_mode=ParseMode.HTML,
     )
 
@@ -187,12 +187,12 @@ async def bc_cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
     pending_broadcasts.pop(query.from_user.id, None)
-    await query.edit_message_text(f"✗ {b('Broadcast cancelled.')}", parse_mode=ParseMode.HTML)
+    await query.edit_message_text(f"❌ {b('Broadcast cancelled.')}", parse_mode=ParseMode.HTML)
 
 # ── /check user_id amount (admin) ──────────────────────────────────────────────
 async def cmd_check(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_admin(update.effective_user):
-        await update.message.reply_text(b("✗ Admin only command."), parse_mode=ParseMode.HTML)
+        await update.message.reply_text(b("❌ Admin only command."), parse_mode=ParseMode.HTML)
         return
     args = context.args
     if len(args) < 2:
@@ -240,19 +240,19 @@ async def cmd_check(update: Update, context: ContextTypes.DEFAULT_TYPE):
         lines.append(f"{b('Referral Balance')}: Rs.{user_doc.get('referral_balance', 0)}")
     lines.append(f"{b('Amount Queried')}: Rs.{amount_inp}\n")
     if mongo_pays:
-        lines.append(f"✔ {b('MongoDB Records')}: {len(mongo_pays)} {u('payment(s) found')}")
+        lines.append(f"✅ {b('MongoDB Records')}: {len(mongo_pays)} {u('payment(s) found')}")
         for p in mongo_pays:
             dt = p['paid_at'].strftime("%d %b %Y %H:%M") if p.get('paid_at') else "N/A"
-            lines.append(f"  ✦ {p['plan_name']} | {p['pay_type']} | {dt}")
+            lines.append(f"  {p['plan_name']} | {p['pay_type']} | {dt}")
     else:
-        lines.append(f"✗ {b('MongoDB')}: {u('No records found')}")
+        lines.append(f"❌ {b('MongoDB')}: {u('No records found')}")
     lines.append("")
     if rzp_found:
-        lines.append(f"✔ {b('Razorpay Records')}: {len(rzp_found)} {u('link(s) found')}")
+        lines.append(f"✅ {b('Razorpay Records')}: {len(rzp_found)} {u('link(s) found')}")
         for r in rzp_found:
-            lines.append(f"  ✦ {r['id']} | {u('Status')}: {r['status']} | Rs.{r['amount']}")
+            lines.append(f"  {r['id']} | {u('Status')}: {r['status']} | Rs.{r['amount']}")
     else:
-        lines.append(f"✗ {b('Razorpay')}: {u('No matching payment links found')}")
+        lines.append(f"❌ {b('Razorpay')}: {u('No matching payment links found')}")
     await update.message.reply_text("\n".join(lines), parse_mode=ParseMode.HTML)
 
 # ── Menu: Available Plans ──────────────────────────────────────────────────────
@@ -263,7 +263,7 @@ async def menu_plans(update: Update, context: ContextTypes.DEFAULT_TYPE):
     plans = get_all_plans()
     buttons = [InlineKeyboardButton(u(p["channel"]), callback_data=f"showplan_{p['id']}") for p in plans]
     keyboard = [buttons[i:i + 2] for i in range(0, len(buttons), 2)]
-    keyboard.append([InlineKeyboardButton(u("← Back"), callback_data="back_main")])
+    keyboard.append([InlineKeyboardButton(u("⬅ Back"), callback_data="back_main")])
     msg = f"★ {b('Available Premium Channels')}\n\n{b('Select A Channel To View Subscription Plans')} ↓"
     await safe_edit(query, context, msg, keyboard)
 
@@ -274,24 +274,24 @@ async def show_plan(update: Update, context: ContextTypes.DEFAULT_TYPE):
     plan = get_plan(pid)
     if not plan:
         await safe_edit(query, context, b("Plan not found. Please go back and try again."),
-                        [[InlineKeyboardButton(u("← Back"), callback_data="menu_plans")]])
+                        [[InlineKeyboardButton(u("⬅ Back"), callback_data="menu_plans")]])
         return
     sample_link = plan.get("sample_link")
     keyboard = [
         [
             InlineKeyboardButton(u("◉ View Sample Content"), url=sample_link) if sample_link
             else InlineKeyboardButton(u("◉ View Sample Content"), callback_data=f"sample_{pid}"),
-            InlineKeyboardButton(u("✧ Payment Proof"), url=PREMIUM_CHANNEL_LINK),
+            InlineKeyboardButton(u("Payment Proof"), url=PREMIUM_CHANNEL_LINK),
         ],
         [InlineKeyboardButton(f"Rs.{plan['price']} - " + u("Permanent"), callback_data=f"buy_{pid}")],
-        [InlineKeyboardButton(u("← Back"), callback_data="menu_plans")],
+        [InlineKeyboardButton(u("⬅ Back"), callback_data="menu_plans")],
     ]
     desc = plan.get("description", "")
     msg = (
         f"★ {b(plan['channel'])}\n\n"
         f"{desc}\n\n"
         f"{b('Available Plans')} ↓\n"
-        f"✦ {b('Permanent')}: Rs.{plan['price']}\n\n"
+        f"{b('Permanent')}: Rs.{plan['price']}\n\n"
         f"{b('Select A Plan To Subscribe Or Click View Sample Content To See A Preview')}"
     )
     await safe_edit(query, context, msg, keyboard)
@@ -301,7 +301,7 @@ async def sample_content(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.answer()
     pid  = query.data[len("sample_"):]
     plan = get_plan(pid)
-    keyboard = [[InlineKeyboardButton(u("← Back"), callback_data=f"showplan_{pid}")]]
+    keyboard = [[InlineKeyboardButton(u("⬅ Back"), callback_data=f"showplan_{pid}")]]
     msg = (
         f"★ {b('Sample Content Preview')}\n\n"
         f"{b('Channel')}: {b(plan['channel']) if plan else ''}\n\n"
@@ -327,12 +327,12 @@ async def buy_plan(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if total >= price:
         keyboard = [
             [InlineKeyboardButton(
-                f"✔ {u('Pay')} Rs.{price} {u('from Wallet')}",
+                f"✅ {u('Pay')} Rs.{price} {u('from Wallet')}",
                 callback_data=f"wpay_{pid}"
             )],
             [InlineKeyboardButton(u("◉ Recharge Wallet"), callback_data="menu_wallet")],
             [InlineKeyboardButton(u("✉ Support"), url=f"https://t.me/{ADMIN_USERNAME}")],
-            [InlineKeyboardButton(u("← Back"), callback_data=f"showplan_{pid}")],
+            [InlineKeyboardButton(u("⬅ Back"), callback_data=f"showplan_{pid}")],
         ]
         msg = (
             f"◉ {b('Pay From Wallet')}\n\n"
@@ -340,9 +340,9 @@ async def buy_plan(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"{b('Plan')}: {b('Permanent')}\n"
             f"{b('Amount')}: Rs.{price}\n\n"
             f"{b('Your Wallet')}:\n"
-            f"  ✦ {b('Recharge Balance')}: Rs.{wb}\n"
-            f"  ✦ {b('Referral Balance')}: Rs.{rb}\n"
-            f"  ✦ {b('Total')}: Rs.{total}\n\n"
+            f"  {b('Recharge Balance')}: Rs.{wb}\n"
+            f"  {b('Referral Balance')}: Rs.{rb}\n"
+            f"  {b('Total')}: Rs.{total}\n\n"
             f"{b('Tap Below To Complete Your Purchase')} ↓"
         )
     else:
@@ -350,17 +350,17 @@ async def buy_plan(update: Update, context: ContextTypes.DEFAULT_TYPE):
         keyboard = [
             [InlineKeyboardButton(u("◉ Recharge Wallet"), callback_data="menu_wallet")],
             [InlineKeyboardButton(u("✉ Support"), url=f"https://t.me/{ADMIN_USERNAME}")],
-            [InlineKeyboardButton(u("← Back"), callback_data=f"showplan_{pid}")],
+            [InlineKeyboardButton(u("⬅ Back"), callback_data=f"showplan_{pid}")],
         ]
         msg = (
-            f"✗ {b('Insufficient Wallet Balance')}\n\n"
+            f"❌ {b('Insufficient Wallet Balance')}\n\n"
             f"{b('Channel')}: {b(plan['channel'])}\n"
             f"{b('Amount Required')}: Rs.{price}\n\n"
             f"{b('Your Wallet')}:\n"
-            f"  ✦ {b('Recharge Balance')}: Rs.{wb}\n"
-            f"  ✦ {b('Referral Balance')}: Rs.{rb}\n"
-            f"  ✦ {b('Total')}: Rs.{total}\n\n"
-            f"✦ {b('You Need')} Rs.{need} {b('More To Buy This Plan')}\n"
+            f"  {b('Recharge Balance')}: Rs.{wb}\n"
+            f"  {b('Referral Balance')}: Rs.{rb}\n"
+            f"  {b('Total')}: Rs.{total}\n\n"
+            f"{b('You Need')} Rs.{need} {b('More To Buy This Plan')}\n"
             f"{b('Please Recharge Your Wallet First')} ↓"
         )
 
@@ -379,10 +379,10 @@ async def wallet_pay_plan(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not success:
         keyboard = [
             [InlineKeyboardButton(u("◉ Recharge Wallet"), callback_data="menu_wallet")],
-            [InlineKeyboardButton(u("← Back"), callback_data=f"buy_{pid}")],
+            [InlineKeyboardButton(u("⬅ Back"), callback_data=f"buy_{pid}")],
         ]
         await safe_edit(query, context,
-            f"✗ {b('Insufficient Balance')}\n\n"
+            f"❌ {b('Insufficient Balance')}\n\n"
             f"{b('Please Recharge Your Wallet And Try Again.')}",
             keyboard)
         return
@@ -393,11 +393,11 @@ async def wallet_pay_plan(update: Update, context: ContextTypes.DEFAULT_TYPE):
     keyboard = [
         [InlineKeyboardButton(u("► Join Premium Channel"), url=plan.get("channel_link", PREMIUM_CHANNEL_LINK))],
         [InlineKeyboardButton(u("✉ Support"),              url=f"https://t.me/{ADMIN_USERNAME}")],
-        [InlineKeyboardButton(u("← Main Menu"),            callback_data="back_main")],
+        [InlineKeyboardButton(u("⬅ Main Menu"),            callback_data="back_main")],
     ]
     wb, rb = get_wallet(query.from_user.id)
     msg = (
-        f"✔ {b('Payment Successful')}\n\n"
+        f"✅ {b('Payment Successful')}\n\n"
         f"★ {b('Welcome To')} {b(plan['channel'])}\n\n"
         f"Rs.{plan['price']} {b('Deducted From Your Wallet')}\n"
         f"{b('Remaining Balance')}: Rs.{wb + rb}\n\n"
@@ -413,15 +413,15 @@ async def menu_about(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = query.from_user
     wb, rb = get_wallet(user.id)
     username_str = f"@{user.username}" if user.username else u("Not set")
-    keyboard = [[InlineKeyboardButton(u("← Main Menu"), callback_data="back_main")]]
+    keyboard = [[InlineKeyboardButton(u("⬅ Main Menu"), callback_data="back_main")]]
     msg = (
         f"◉ {b('Your Profile')}\n\n"
-        f"✦ {b('Telegram ID')}: <code>{user.id}</code>\n"
-        f"✦ {b('Username')}: {username_str}\n\n"
+        f"{b('Telegram ID')}: <code>{user.id}</code>\n"
+        f"{b('Username')}: {username_str}\n\n"
         f"★ {b('Wallet')}\n"
-        f"  ✦ {b('Recharge Balance')}: Rs.{wb}\n"
-        f"  ✦ {b('Referral Balance')}: Rs.{rb}\n"
-        f"  ✦ {b('Total Balance')}: Rs.{wb + rb}"
+        f"  {b('Recharge Balance')}: Rs.{wb}\n"
+        f"  {b('Referral Balance')}: Rs.{rb}\n"
+        f"  {b('Total Balance')}: Rs.{wb + rb}"
     )
     await safe_edit(query, context, msg, keyboard)
 
@@ -439,13 +439,13 @@ async def menu_wallet(update: Update, context: ContextTypes.DEFAULT_TYPE):
     ]
     keyboard = [amt_buttons]
     keyboard.append([InlineKeyboardButton(u("✎ Custom Amount"), callback_data="wamt_custom")])
-    keyboard.append([InlineKeyboardButton(u("← Back"), callback_data="back_main")])
+    keyboard.append([InlineKeyboardButton(u("⬅ Back"), callback_data="back_main")])
 
     msg = (
         f"◉ {b('Your Wallet')}\n\n"
-        f"  ✦ {b('Recharge Balance')}: Rs.{wb}\n"
-        f"  ✦ {b('Referral Balance')}: Rs.{rb}\n"
-        f"  ✦ {b('Total Balance')}: Rs.{total}\n\n"
+        f"  {b('Recharge Balance')}: Rs.{wb}\n"
+        f"  {b('Referral Balance')}: Rs.{rb}\n"
+        f"  {b('Total Balance')}: Rs.{total}\n\n"
         f"─────────────────────\n"
         f"★ {b('Recharge Wallet')}\n"
         f"{b('Select An Amount To Add To Your Wallet')} ↓"
@@ -456,7 +456,7 @@ async def wallet_custom_amount(update: Update, context: ContextTypes.DEFAULT_TYP
     query = update.callback_query
     await query.answer()
     context.user_data["awaiting_recharge"] = True
-    keyboard = [[InlineKeyboardButton(u("✗ Cancel"), callback_data="menu_wallet")]]
+    keyboard = [[InlineKeyboardButton(u("❌ Cancel"), callback_data="menu_wallet")]]
     await safe_edit(query, context,
         f"✎ {b('Custom Recharge Amount')}\n\n"
         f"{b('Send The Amount You Want To Add To Your Wallet')}\n"
@@ -474,7 +474,7 @@ async def handle_custom_recharge_input(update: Update, context: ContextTypes.DEF
             raise ValueError
     except ValueError:
         await update.message.reply_text(
-            f"✗ {b('Invalid Amount.')} {u('Please send a number, e.g.')} <code>75</code>",
+            f"❌ {b('Invalid Amount.')} {u('Please send a number, e.g.')} <code>75</code>",
             parse_mode=ParseMode.HTML,
         )
         return
@@ -491,7 +491,7 @@ async def handle_custom_recharge_input(update: Update, context: ContextTypes.DEF
             InlineKeyboardButton(u("Coming Soon"),     callback_data="dummy_placeholder"),
         ],
         [InlineKeyboardButton(u("✉ Support"), url=f"https://t.me/{ADMIN_USERNAME}")],
-        [InlineKeyboardButton(u("← Back"), callback_data="menu_wallet")],
+        [InlineKeyboardButton(u("⬅ Back"), callback_data="menu_wallet")],
     ]
     await update.message.reply_text(
         f"◉ {b('Wallet Recharge')}\n\n"
@@ -517,7 +517,7 @@ async def wallet_amount_selected(update: Update, context: ContextTypes.DEFAULT_T
             InlineKeyboardButton(u("Coming Soon"),     callback_data="dummy_placeholder"),
         ],
         [InlineKeyboardButton(u("✉ Support"), url=f"https://t.me/{ADMIN_USERNAME}")],
-        [InlineKeyboardButton(u("← Back"), callback_data="menu_wallet")],
+        [InlineKeyboardButton(u("⬅ Back"), callback_data="menu_wallet")],
     ]
     msg = (
         f"◉ {b('Wallet Recharge')}\n\n"
@@ -551,10 +551,10 @@ async def wallet_pay_razorpay(update: Update, context: ContextTypes.DEFAULT_TYPE
         }
         keyboard = [
             [InlineKeyboardButton(u("► Open Payment Page"), url=short_url)],
-            [InlineKeyboardButton(u("✔ I Have Paid"),       callback_data=f"wdone_link_{link_id}_{amt}")],
+            [InlineKeyboardButton(u("✅ I Have Paid"),       callback_data=f"wdone_link_{link_id}_{amt}")],
             [
                 InlineKeyboardButton(u("✉ Support"), url=f"https://t.me/{ADMIN_USERNAME}"),
-                InlineKeyboardButton(u("✗ Cancel"),  callback_data="menu_wallet"),
+                InlineKeyboardButton(u("❌ Cancel"),  callback_data="menu_wallet"),
             ],
         ]
         msg = (
@@ -567,10 +567,10 @@ async def wallet_pay_razorpay(update: Update, context: ContextTypes.DEFAULT_TYPE
     except Exception as e:
         logger.error(f"Wallet Razorpay link error: {e}")
         await safe_edit(query, context,
-            f"✗ {b('Error creating payment. Please try again or contact support.')}\n@{ADMIN_USERNAME}",
+            f"❌ {b('Error creating payment. Please try again or contact support.')}\n@{ADMIN_USERNAME}",
             [
                 [InlineKeyboardButton(u("✉ Support"), url=f"https://t.me/{ADMIN_USERNAME}")],
-                [InlineKeyboardButton(u("← Back"), callback_data=f"wamt_{amt}")],
+                [InlineKeyboardButton(u("⬅ Back"), callback_data=f"wamt_{amt}")],
             ])
 
 # ── Wallet recharge: QR ────────────────────────────────────────────────────────
@@ -634,18 +634,18 @@ async def wallet_pay_qr(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "amount": amt, "type": "qr", "ref_id": qr_id, "timestamp": time.time(),
         }
         keyboard = [
-            [InlineKeyboardButton(u("✔ I've Completed Payment"), callback_data=f"wdone_qr_{qr_id}_{amt}")],
+            [InlineKeyboardButton(u("✅ I've Completed Payment"), callback_data=f"wdone_qr_{qr_id}_{amt}")],
             [
                 InlineKeyboardButton(u("✉ Support"), url=f"https://t.me/{ADMIN_USERNAME}"),
-                InlineKeyboardButton(u("✗ Cancel"),  callback_data="menu_wallet"),
+                InlineKeyboardButton(u("❌ Cancel"),  callback_data="menu_wallet"),
             ],
         ]
         caption = (
             f"◉ {b('UPI Wallet Recharge')}\n\n"
             f"{b('Amount')}: Rs.{amt}\n\n"
             f"{b('Scan The QR Code Above Using Any UPI App')}\n"
-            f"{b('Once Paid, Tap I ve Completed Payment')} ✔ {b('Below')}\n\n"
-            f"✦ {b('If You Are Not Able To Pay In This QR Code Please Try With Paytm, PhonePay Or Any Other Upi App')}\n\n"
+            f"{b('Once Paid, Tap I ve Completed Payment')} ✅ {b('Below')}\n\n"
+            f"{b('If You Are Not Able To Pay In This QR Code Please Try With Paytm, PhonePay Or Any Other Upi App')}\n\n"
             f"◉ {b('This QR Will Expire In 15 Minutes')}"
         )
         chat_id = query.message.chat_id
@@ -684,7 +684,7 @@ async def wallet_pay_crypto(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     keyboard = [
         [InlineKeyboardButton(u("✉ Contact Admin"), url=f"https://t.me/{ADMIN_USERNAME}")],
-        [InlineKeyboardButton(u("← Back"),           callback_data=f"wamt_{amt}")],
+        [InlineKeyboardButton(u("⬅ Back"),           callback_data=f"wamt_{amt}")],
     ]
     msg = (
         f"★ {b('Wallet Recharge Via Crypto (USDT)')}\n\n"
@@ -692,7 +692,7 @@ async def wallet_pay_crypto(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"{b('Network')}: {b(CRYPTO_NETWORK)}\n"
         f"◉ {b('Wallet Address')}:\n\n<code>{CRYPTO_ADDRESS}</code>\n\n"
         f"{b('Tap The Address Above To Copy It')}\n\n"
-        f"<blockquote>✦ {b('Please Double Check The Network And Wallet Address Before Sending. Sending To A Wrong Network Or Address May Result In Permanent Loss Of Funds')}\n\n"
+        f"<blockquote>{b('Please Double Check The Network And Wallet Address Before Sending. Sending To A Wrong Network Or Address May Result In Permanent Loss Of Funds')}\n\n"
         f"{b('After Payment, Send The Screenshot Of Your Transaction To Admin')}</blockquote>"
     )
     await safe_edit(query, context, msg, keyboard)
@@ -739,15 +739,15 @@ async def wallet_done(update: Update, context: ContextTypes.DEFAULT_TYPE):
         keyboard = [
             [InlineKeyboardButton(u("★ Browse Subscriptions"), callback_data="menu_plans")],
             [InlineKeyboardButton(u("◉ Wallet"),               callback_data="menu_wallet")],
-            [InlineKeyboardButton(u("← Main Menu"),            callback_data="back_main")],
+            [InlineKeyboardButton(u("⬅ Main Menu"),            callback_data="back_main")],
         ]
         msg = (
-            f"✔ {b('Wallet Recharged Successfully')}\n\n"
+            f"✅ {b('Wallet Recharged Successfully')}\n\n"
             f"★ {b('Amount Added')}: Rs.{stored_amt}\n\n"
             f"{b('Your Wallet')}:\n"
-            f"  ✦ {b('Recharge Balance')}: Rs.{wb}\n"
-            f"  ✦ {b('Referral Balance')}: Rs.{rb}\n"
-            f"  ✦ {b('Total Balance')}: Rs.{wb + rb}\n\n"
+            f"  {b('Recharge Balance')}: Rs.{wb}\n"
+            f"  {b('Referral Balance')}: Rs.{rb}\n"
+            f"  {b('Total Balance')}: Rs.{wb + rb}\n\n"
             f"{b('You Can Now Buy Subscriptions')} ↓"
         )
         await safe_edit(query, context, msg, keyboard)
@@ -766,10 +766,10 @@ async def wallet_done(update: Update, context: ContextTypes.DEFAULT_TYPE):
         keyboard = [
             retry_row,
             [InlineKeyboardButton(u("✉ Support"), url=f"https://t.me/{ADMIN_USERNAME}")],
-            [InlineKeyboardButton(u("← Back"),    callback_data="menu_wallet")],
+            [InlineKeyboardButton(u("⬅ Back"),    callback_data="menu_wallet")],
         ]
         msg = (
-            f"✗ {b('Payment Not Verified Yet')}\n\n"
+            f"❌ {b('Payment Not Verified Yet')}\n\n"
             f"{b('We Could Not Confirm Your Payment At This Time')}\n"
             f"{b('This Could Be Due To A Delay In The Payment System')}\n\n"
             f"{b('Please Wait A Moment And Try Again Or Contact Support')} @{ADMIN_USERNAME}"
@@ -792,12 +792,12 @@ async def menu_refer(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     keyboard = [
         [InlineKeyboardButton(u("► Share Referral Link"), url=share_url)],
-        [InlineKeyboardButton(u("← Main Menu"), callback_data="back_main")],
+        [InlineKeyboardButton(u("⬅ Main Menu"), callback_data="back_main")],
     ]
     msg = (
         f"★ {b('Refer and Earn')}\n\n"
         f"{b('Share Your Referral Link And Earn Rs.1 For Every New Member Who Joins')}\n\n"
-        f"✦ {b('Total Referral Earned')}: Rs.{rb}\n\n"
+        f"{b('Total Referral Earned')}: Rs.{rb}\n\n"
         f"◉ {b('How It Works')}:\n"
         f"  1. {b('Tap Share Referral Link below')}\n"
         f"  2. {b('Forward to your friends or groups')}\n"
@@ -812,15 +812,15 @@ async def support(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.answer()
     keyboard = [
         [InlineKeyboardButton(u("✉ Contact Admin"),  url=f"https://t.me/{ADMIN_USERNAME}")],
-        [InlineKeyboardButton(u("← Main Menu"), callback_data="back_main")],
+        [InlineKeyboardButton(u("⬅ Main Menu"), callback_data="back_main")],
     ]
     msg = (
         f"★ {b('Help & Support')}\n\n"
         f"{b('If You Have Any Questions Or Need Assistance With Your Subscription, Please Contact Our Admin')}\n\n"
         f"◉ {b('For Common Questions')}:\n"
-        f"  ✦ {b('To Subscribe')}: {b('Recharge Wallet Then Select Premium Subscription')}\n"
-        f"  ✦ {b('Payment Issues')}: {b('Contact Our Admin Directly')}\n"
-        f"  ✦ {b('Access Problems')}: {b('Contact Our Admin With Your Subscription Details')}\n\n"
+        f"  {b('To Subscribe')}: {b('Recharge Wallet Then Select Premium Subscription')}\n"
+        f"  {b('Payment Issues')}: {b('Contact Our Admin Directly')}\n"
+        f"  {b('Access Problems')}: {b('Contact Our Admin With Your Subscription Details')}\n\n"
         f"{b('Our Support Admin')}: @{ADMIN_USERNAME}"
     )
     await safe_edit(query, context, msg, keyboard)
@@ -830,7 +830,7 @@ async def developer(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.answer()
     keyboard = [
         [InlineKeyboardButton(u("✉ Contact Developer"), url=f"https://t.me/{ADMIN_USERNAME}")],
-        [InlineKeyboardButton(u("← Main Menu"),          callback_data="back_main")],
+        [InlineKeyboardButton(u("⬅ Main Menu"),          callback_data="back_main")],
     ]
     msg = (
         f"★ {b('Bot Developer / Creator')}\n\n"
@@ -848,11 +848,11 @@ NP_NAME, NP_DESC, NP_PRICE, NP_PAYDESC, NP_LINK, NP_SAMPLE = range(6)
 
 async def np_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_admin(update.effective_user):
-        await update.message.reply_text(b("✗ Admin Only Command."), parse_mode=ParseMode.HTML)
+        await update.message.reply_text(b("❌ Admin Only Command."), parse_mode=ParseMode.HTML)
         return ConversationHandler.END
     context.user_data.clear()
     await update.message.reply_text(
-        f"✦ {b('New Plan — Step 1/6')}\n\n"
+        f"{b('New Plan — Step 1/6')}\n\n"
         f"{b('Send The Plan Name')} — {u('this will appear as the button text.')}\n\n"
         f"{u('Send /cancel to stop.')}",
         parse_mode=ParseMode.HTML,
@@ -862,8 +862,8 @@ async def np_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def np_got_name(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data["np_name"] = update.message.text.strip()
     await update.message.reply_text(
-        f"✔ {b('Name Saved')}: <b>{context.user_data['np_name']}</b>\n\n"
-        f"✦ {b('Step 2/6')} — {b('Send The Description.')}\n"
+        f"✅ {b('Name Saved')}: <b>{context.user_data['np_name']}</b>\n\n"
+        f"{b('Step 2/6')} — {b('Send The Description.')}\n"
         f"{u('Any formatting (bold, spoiler, italic) will be preserved exactly as sent.')}",
         parse_mode=ParseMode.HTML,
     )
@@ -872,8 +872,8 @@ async def np_got_name(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def np_got_desc(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data["np_desc"] = update.message.text_html
     await update.message.reply_text(
-        f"✔ {b('Description Saved.')}\n\n"
-        f"✦ {b('Step 3/6')} — {b('Send The Price')} {u('(number only, e.g.')} <code>299</code>{u(')')}",
+        f"✅ {b('Description Saved.')}\n\n"
+        f"{b('Step 3/6')} — {b('Send The Price')} {u('(number only, e.g.')} <code>299</code>{u(')')}",
         parse_mode=ParseMode.HTML,
     )
     return NP_PRICE
@@ -885,14 +885,14 @@ async def np_got_price(update: Update, context: ContextTypes.DEFAULT_TYPE):
             raise ValueError
     except ValueError:
         await update.message.reply_text(
-            f"✗ {b('Invalid Price.')} {u('Send a number only, e.g.')} <code>299</code>",
+            f"❌ {b('Invalid Price.')} {u('Send a number only, e.g.')} <code>299</code>",
             parse_mode=ParseMode.HTML,
         )
         return NP_PRICE
     context.user_data["np_price"] = price
     await update.message.reply_text(
-        f"✔ {b('Price')}: Rs.{price}\n\n"
-        f"✦ {b('Step 4/6')} — {b('Send The Payment Description.')}\n"
+        f"✅ {b('Price')}: Rs.{price}\n\n"
+        f"{b('Step 4/6')} — {b('Send The Payment Description.')}\n"
         f"{u('This appears in Razorpay during payment, e.g.')}\n"
         f"<code>Subscription: HAWT PACK</code>",
         parse_mode=ParseMode.HTML,
@@ -902,8 +902,8 @@ async def np_got_price(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def np_got_paydesc(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data["np_paydesc"] = update.message.text.strip()
     await update.message.reply_text(
-        f"✔ {b('Payment Description Saved.')}\n\n"
-        f"✦ {b('Step 5/6')} — {b('Send The Premium Channel Link.')}\n"
+        f"✅ {b('Payment Description Saved.')}\n\n"
+        f"{b('Step 5/6')} — {b('Send The Premium Channel Link.')}\n"
         f"{u('This is the invite link users get after successful payment, e.g.')}\n"
         f"<code>https://t.me/+xxxxxxxxxx</code>",
         parse_mode=ParseMode.HTML,
@@ -913,8 +913,8 @@ async def np_got_paydesc(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def np_got_link(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data["np_link"] = update.message.text.strip()
     await update.message.reply_text(
-        f"✔ {b('Channel Link Saved.')}\n\n"
-        f"✦ {b('Step 6/6')} — {b('Send The Sample Content Link.')}\n"
+        f"✅ {b('Channel Link Saved.')}\n\n"
+        f"{b('Step 6/6')} — {b('Send The Sample Content Link.')}\n"
         f"{u('Users will be taken to this link when they click View Sample Content, e.g.')}\n"
         f"<code>https://t.me/+xxxxxxxxxx</code>",
         parse_mode=ParseMode.HTML,
@@ -940,13 +940,13 @@ async def np_got_sample(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "created_at":      datetime.now(timezone.utc),
     })
     await update.message.reply_text(
-        f"✔ {b('Plan Added Successfully')}\n\n"
-        f"✦ {b('ID')}: <code>{pid}</code>\n"
-        f"✦ {b('Name')}: {name}\n"
-        f"✦ {b('Price')}: Rs.{price}\n"
-        f"✦ {b('Payment Description')}: {pay_desc}\n"
-        f"✦ {b('Channel Link')}: {channel_link}\n"
-        f"✦ {b('Sample Link')}: {sample_link}",
+        f"✅ {b('Plan Added Successfully')}\n\n"
+        f"{b('ID')}: <code>{pid}</code>\n"
+        f"{b('Name')}: {name}\n"
+        f"{b('Price')}: Rs.{price}\n"
+        f"{b('Payment Description')}: {pay_desc}\n"
+        f"{b('Channel Link')}: {channel_link}\n"
+        f"{b('Sample Link')}: {sample_link}",
         parse_mode=ParseMode.HTML,
     )
     context.user_data.clear()
@@ -954,25 +954,25 @@ async def np_got_sample(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def np_cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data.clear()
-    await update.message.reply_text(b("✗ New Plan Cancelled."), parse_mode=ParseMode.HTML)
+    await update.message.reply_text(b("❌ New Plan Cancelled."), parse_mode=ParseMode.HTML)
     return ConversationHandler.END
 
 # ── /removeplan (admin) ────────────────────────────────────────────────────────
 async def cmd_removeplan(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_admin(update.effective_user):
-        await update.message.reply_text(b("✗ Admin Only Command."), parse_mode=ParseMode.HTML)
+        await update.message.reply_text(b("❌ Admin Only Command."), parse_mode=ParseMode.HTML)
         return
     plans = get_all_plans()
     if not plans:
-        await update.message.reply_text(b("✗ No Plans Found."), parse_mode=ParseMode.HTML)
+        await update.message.reply_text(b("❌ No Plans Found."), parse_mode=ParseMode.HTML)
         return
     keyboard = [
-        [InlineKeyboardButton(f"✗ {p['channel']} — Rs.{p['price']}", callback_data=f"rmp_{p['id']}")]
+        [InlineKeyboardButton(f"❌ {p['channel']} — Rs.{p['price']}", callback_data=f"rmp_{p['id']}")]
         for p in plans
     ]
-    keyboard.append([InlineKeyboardButton(u("✗ Cancel"), callback_data="rmp_cancel")])
+    keyboard.append([InlineKeyboardButton(u("❌ Cancel"), callback_data="rmp_cancel")])
     await update.message.reply_text(
-        f"✗ {b('Remove Plan')}\n\n{b('Select The Plan You Want To Remove')} ↓",
+        f"❌ {b('Remove Plan')}\n\n{b('Select The Plan You Want To Remove')} ↓",
         reply_markup=InlineKeyboardMarkup(keyboard),
         parse_mode=ParseMode.HTML,
     )
@@ -985,14 +985,14 @@ async def rmp_select(update: Update, context: ContextTypes.DEFAULT_TYPE):
     pid  = query.data[len("rmp_"):]
     plan = get_plan(pid)
     if not plan:
-        await query.edit_message_text(b("✗ Plan Not Found."), parse_mode=ParseMode.HTML)
+        await query.edit_message_text(b("❌ Plan Not Found."), parse_mode=ParseMode.HTML)
         return
     keyboard = [[
-        InlineKeyboardButton(u("✔ Yes, Remove It"), callback_data=f"rmp_confirm_{pid}"),
-        InlineKeyboardButton(u("✗ No, Cancel"),      callback_data="rmp_cancel"),
+        InlineKeyboardButton(u("✅ Yes, Remove It"), callback_data=f"rmp_confirm_{pid}"),
+        InlineKeyboardButton(u("❌ No, Cancel"),      callback_data="rmp_cancel"),
     ]]
     await query.edit_message_text(
-        f"✦ {b('Confirm Removal')}\n\n"
+        f"{b('Confirm Removal')}\n\n"
         f"{b('Are You Sure You Want To Remove')} <b>{plan['channel']}</b> (Rs.{plan['price']})?\n\n"
         f"{u('This action cannot be undone.')}",
         reply_markup=InlineKeyboardMarkup(keyboard),
@@ -1009,16 +1009,16 @@ async def rmp_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if plan:
         plans_col.delete_one({"id": pid})
         await query.edit_message_text(
-            f"✔ {b(plan['channel'])} {u('has been removed successfully.')}",
+            f"✅ {b(plan['channel'])} {u('has been removed successfully.')}",
             parse_mode=ParseMode.HTML,
         )
     else:
-        await query.edit_message_text(b("✗ Plan Not Found."), parse_mode=ParseMode.HTML)
+        await query.edit_message_text(b("❌ Plan Not Found."), parse_mode=ParseMode.HTML)
 
 async def rmp_cancel_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
-    await query.edit_message_text(b("✗ Remove Cancelled."), parse_mode=ParseMode.HTML)
+    await query.edit_message_text(b("❌ Remove Cancelled."), parse_mode=ParseMode.HTML)
 
 # ── Callback router ────────────────────────────────────────────────────────────
 async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
