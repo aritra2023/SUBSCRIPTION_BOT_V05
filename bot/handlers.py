@@ -31,11 +31,11 @@ logger = logging.getLogger(__name__)
 RECHARGE_AMOUNTS = [25, 50, 100]
 
 # ── Persistent bottom keyboard ─────────────────────────────────────────────────
-BTN_SUBS    = "🛍️ Available Subscriptions"
-BTN_TOPUP   = "💳 Top Up"
-BTN_HOWTOBUY= "❓ How to Buy"
-BTN_FREE    = "🆓 Free Channel"
-BTN_SUPPORT = "💬 Support"
+BTN_SUBS    = "Available Subscriptions"
+BTN_TOPUP   = "Top Up"
+BTN_HOWTOBUY= "How to Buy"
+BTN_FREE    = "Free Channel"
+BTN_SUPPORT = "Support"
 
 REPLY_KB_TEXTS = {BTN_SUBS, BTN_TOPUP, BTN_HOWTOBUY, BTN_FREE, BTN_SUPPORT}
 
