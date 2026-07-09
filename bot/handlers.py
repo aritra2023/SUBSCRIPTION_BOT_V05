@@ -109,6 +109,70 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             inline,
         )
 
+# ── /addbalance user_id amount (admin) ────────────────────────────────────────
+async def cmd_addbalance(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not is_admin(update.effective_user):
+        await update.message.reply_text(b("❌ Admin only command."), parse_mode=ParseMode.HTML)
+        return
+    args = context.args
+    if len(args) < 2:
+        await update.message.reply_text(
+            f"{b('Usage')}: /addbalance {u('user_id amount')}\n"
+            f"{u('Example')}: /addbalance 123456789 100",
+            parse_mode=ParseMode.HTML,
+        )
+        return
+    try:
+        target_uid = int(args[0])
+        amount     = int(args[1])
+        if amount <= 0:
+            raise ValueError
+    except ValueError:
+        await update.message.reply_text(
+            b("❌ Invalid user_id or amount. Amount must be a positive number."),
+            parse_mode=ParseMode.HTML,
+        )
+        return
+
+    user_doc = users_col.find_one({"user_id": target_uid})
+    if not user_doc:
+        await update.message.reply_text(
+            f"❌ {b('User not found.')} {u('Make sure the user has started the bot.')}",
+            parse_mode=ParseMode.HTML,
+        )
+        return
+
+    credit_wallet(target_uid, amount, field="wallet_balance")
+    wb, rb = get_wallet(target_uid)
+
+    name = f"{user_doc.get('first_name', '')} {user_doc.get('last_name', '') or ''}".strip()
+    un   = f"@{user_doc['username']}" if user_doc.get("username") else u("(no username)")
+
+    await update.message.reply_text(
+        f"✅ {b('Balance Added Successfully')}\n\n"
+        f"👤 {b('User')}: {name} {un}\n"
+        f"🆔 {b('ID')}: <code>{target_uid}</code>\n"
+        f"💰 {b('Added')}: Rs.{amount}\n\n"
+        f"💳 {b('New Wallet Balance')}: Rs.{wb}\n"
+        f"🎁 {b('Referral Balance')}: Rs.{rb}\n"
+        f"💵 {b('Total')}: Rs.{wb + rb}",
+        parse_mode=ParseMode.HTML,
+    )
+
+    # Notify the user
+    try:
+        await context.bot.send_message(
+            chat_id=target_uid,
+            text=f"✅ {b('Wallet Credited')}\n\n"
+                 f"💰 {b('Rs.'+ str(amount) + ' has been added to your wallet by admin.')}\n\n"
+                 f"💳 {b('Recharge Balance')}: Rs.{wb}\n"
+                 f"🎁 {b('Referral Balance')}: Rs.{rb}\n"
+                 f"💵 {b('Total Balance')}: Rs.{wb + rb}",
+            parse_mode=ParseMode.HTML,
+        )
+    except Exception:
+        pass
+
 # ── /stats (admin) ─────────────────────────────────────────────────────────────
 async def cmd_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_admin(update.effective_user):
