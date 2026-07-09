@@ -18,6 +18,7 @@ from config import (
     razorpay_client, users_col, pays_col, plans_col,
     pending_payments, pending_recharges, pending_broadcasts,
     get_all_plans, get_plan,
+    get_free_channel_link, get_tutorial_link, set_setting, remove_setting,
 )
 from utils import (
     u, b, is_admin, safe_edit, save_user, record_payment,
@@ -94,13 +95,14 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         ],
     ]
     if update.message:
-        # First /start for new users: set the persistent bottom keyboard
-        if is_new:
-            kb_msg = await update.message.reply_text("👋", reply_markup=MAIN_KEYBOARD)
-            try:
-                await kb_msg.delete()
-            except Exception:
-                pass
+        # Ensure the persistent bottom keyboard is always (re)shown on /start,
+        # not just for brand-new users — otherwise it can disappear if the
+        # user's client clears it (e.g. after opening another bot/chat).
+        kb_msg = await update.message.reply_text("👋", reply_markup=MAIN_KEYBOARD)
+        try:
+            await kb_msg.delete()
+        except Exception:
+            pass
         await update.message.reply_text(
             msg,
             reply_markup=InlineKeyboardMarkup(inline),
@@ -1132,19 +1134,16 @@ async def rmp_cancel_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # ── How to Buy ─────────────────────────────────────────────────────────────────
 async def how_to_buy(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    keyboard = [[InlineKeyboardButton(u("🛍️ Browse Subscriptions"), callback_data="menu_plans")]]
-    msg = (
-        f"❓ {b('How To Buy A Subscription')}\n\n"
-        f"1️⃣  {b('Recharge Your Wallet')}\n"
-        f"     Tap 💳 Top Up → choose amount → pay via UPI / QR / Crypto\n\n"
-        f"2️⃣  {b('Browse Plans')}\n"
-        f"     Tap 🛍️ Available Subscriptions → pick a channel\n\n"
-        f"3️⃣  {b('Pay From Wallet')}\n"
-        f"     Tap Pay From Wallet → access granted instantly\n\n"
-        f"4️⃣  {b('Join The Channel')}\n"
-        f"     Click the invite link sent after successful payment\n\n"
-        f"💬 {b('Need Help?')} Contact: @{SUPPORT_USERNAME}"
-    )
+    tutorial_link = get_tutorial_link()
+    if tutorial_link:
+        keyboard = [[InlineKeyboardButton(u("📖 How To Buy"), url=tutorial_link)]]
+        msg = f"❓ {b('How To Buy')}"
+    else:
+        keyboard = [[InlineKeyboardButton(u("🛍️ Browse Subscriptions"), callback_data="menu_plans")]]
+        msg = (
+            f"❓ {b('How To Buy')}\n\n"
+            f"{b('Tutorial not set yet.')} {u('Contact')} @{SUPPORT_USERNAME}"
+        )
     if update.callback_query:
         await update.callback_query.answer()
         await safe_edit(update.callback_query, context, msg, keyboard)
@@ -1155,19 +1154,73 @@ async def how_to_buy(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # ── Free Channel ───────────────────────────────────────────────────────────────
 async def free_channel(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    keyboard = [[InlineKeyboardButton(u("🆓 Join Free Channel"), url=FREE_CHANNEL_LINK)]]
-    msg = (
-        f"🆓 {b('Free Channel')}\n\n"
-        f"{b('Join our free channel for sample content and updates')}\n\n"
-        f"👇 {b('Tap the button below to join')}"
-    )
+    link = get_free_channel_link()
+    if link:
+        keyboard = [[InlineKeyboardButton(u("🆓 Join Free Channel"), url=link)]]
+        msg = f"🆓 {b('Free Channel')}"
+    else:
+        keyboard = []
+        msg = f"🆓 {b('Free channel not set yet.')} {u('Contact')} @{SUPPORT_USERNAME}"
     if update.callback_query:
         await update.callback_query.answer()
         await safe_edit(update.callback_query, context, msg, keyboard)
     else:
         await update.message.reply_text(
-            msg, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML,
+            msg, reply_markup=InlineKeyboardMarkup(keyboard) if keyboard else None,
+            parse_mode=ParseMode.HTML,
         )
+
+# ── /set_freechannel <link> (admin) ────────────────────────────────────────────
+async def cmd_set_freechannel(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not is_admin(update.effective_user):
+        await update.message.reply_text(b("❌ Admin only command."), parse_mode=ParseMode.HTML)
+        return
+    if not context.args:
+        await update.message.reply_text(
+            f"{b('Usage')}: /set_freechannel {u('<link>')}",
+            parse_mode=ParseMode.HTML,
+        )
+        return
+    link = context.args[0].strip()
+    set_setting("free_channel_link", link)
+    await update.message.reply_text(
+        f"✅ {b('Free channel link set to')}:\n{link}",
+        parse_mode=ParseMode.HTML,
+    )
+
+# ── /remove_freechannel (admin) ────────────────────────────────────────────────
+async def cmd_remove_freechannel(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not is_admin(update.effective_user):
+        await update.message.reply_text(b("❌ Admin only command."), parse_mode=ParseMode.HTML)
+        return
+    set_setting("free_channel_link", None)
+    await update.message.reply_text(b("✅ Free channel link removed."), parse_mode=ParseMode.HTML)
+
+# ── /set_tutorial <link> (admin) ───────────────────────────────────────────────
+async def cmd_set_tutorial(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not is_admin(update.effective_user):
+        await update.message.reply_text(b("❌ Admin only command."), parse_mode=ParseMode.HTML)
+        return
+    if not context.args:
+        await update.message.reply_text(
+            f"{b('Usage')}: /set_tutorial {u('<link>')}",
+            parse_mode=ParseMode.HTML,
+        )
+        return
+    link = context.args[0].strip()
+    set_setting("tutorial_link", link)
+    await update.message.reply_text(
+        f"✅ {b('Tutorial link set to')}:\n{link}",
+        parse_mode=ParseMode.HTML,
+    )
+
+# ── /remove_tutorial (admin) ───────────────────────────────────────────────────
+async def cmd_remove_tutorial(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not is_admin(update.effective_user):
+        await update.message.reply_text(b("❌ Admin only command."), parse_mode=ParseMode.HTML)
+        return
+    remove_setting("tutorial_link")
+    await update.message.reply_text(b("✅ Tutorial link removed."), parse_mode=ParseMode.HTML)
 
 # ── Reply-keyboard button handler ──────────────────────────────────────────────
 async def handle_reply_keyboard(update: Update, context: ContextTypes.DEFAULT_TYPE):

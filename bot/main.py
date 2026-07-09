@@ -13,6 +13,7 @@ from telegram.ext import (
 from config import BOT_TOKEN
 from handlers import (
     start, cmd_stats, cmd_broadcast, cmd_check, cmd_removeplan, cmd_addbalance,
+    cmd_set_freechannel, cmd_remove_freechannel, cmd_set_tutorial, cmd_remove_tutorial,
     bc_confirm, bc_cancel,
     handle_callback, handle_custom_recharge_input,
     handle_reply_keyboard, how_to_buy, free_channel,
@@ -77,6 +78,10 @@ def main():
     app.add_handler(CommandHandler("check",      cmd_check))
     app.add_handler(CommandHandler("removeplan",  cmd_removeplan))
     app.add_handler(CommandHandler("addbalance",  cmd_addbalance))
+    app.add_handler(CommandHandler("set_freechannel",    cmd_set_freechannel))
+    app.add_handler(CommandHandler("remove_freechannel", cmd_remove_freechannel))
+    app.add_handler(CommandHandler("set_tutorial",       cmd_set_tutorial))
+    app.add_handler(CommandHandler("remove_tutorial",    cmd_remove_tutorial))
     app.add_handler(CallbackQueryHandler(handle_callback))
 
     logger.info("Bot starting...")

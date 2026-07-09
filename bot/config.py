@@ -28,11 +28,35 @@ CRYPTO_ADDRESS       = "0x2c191f92fad334dc3c650e8a315bd1a4b4c77781"
 razorpay_client = razorpay.Client(auth=(RAZORPAY_KEY_ID, RAZORPAY_KEY_SECRET))
 
 # ── MongoDB ───────────────────────────────────────────────────────────────────
-mongo     = MongoClient(MONGODB_URI)
-db        = mongo["paybot"]
-users_col = db["users"]
-pays_col  = db["payments"]
-plans_col = db["plans"]
+mongo        = MongoClient(MONGODB_URI)
+db           = mongo["paybot"]
+users_col    = db["users"]
+pays_col     = db["payments"]
+plans_col    = db["plans"]
+settings_col = db["settings"]
+
+# ── Settings (MongoDB-backed, survive restarts) ───────────────────────────────
+def get_setting(key: str, default=None):
+    doc = settings_col.find_one({"key": key})
+    return doc["value"] if doc else default
+
+def set_setting(key: str, value):
+    settings_col.update_one({"key": key}, {"$set": {"value": value}}, upsert=True)
+
+def remove_setting(key: str):
+    settings_col.delete_one({"key": key})
+
+_FREE_CHANNEL_UNSET = object()
+
+def get_free_channel_link():
+    value = get_setting("free_channel_link", _FREE_CHANNEL_UNSET)
+    if value is _FREE_CHANNEL_UNSET:
+        # No admin override yet: fall back to the link baked in at import time.
+        return FREE_CHANNEL_LINK
+    return value  # may be None if explicitly removed
+
+def get_tutorial_link():
+    return get_setting("tutorial_link", None)
 
 # ── In-memory state ───────────────────────────────────────────────────────────
 pending_payments   = {}   # user_id → payment info
