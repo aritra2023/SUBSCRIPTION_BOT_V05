@@ -3,6 +3,7 @@ import io
 import json
 import time
 import uuid
+import urllib.parse
 import urllib.request
 from datetime import datetime, timezone
 
@@ -25,7 +26,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 # ── Recharge amount presets ────────────────────────────────────────────────────
-RECHARGE_AMOUNTS = [199, 299, 399, 499, 699, 999]
+RECHARGE_AMOUNTS = [10, 25, 50, 100, 150]
 
 # ── /start ─────────────────────────────────────────────────────────────────────
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -442,6 +443,7 @@ async def menu_wallet(update: Update, context: ContextTypes.DEFAULT_TYPE):
     keyboard = [
         amt_buttons[i:i+3] for i in range(0, len(amt_buttons), 3)
     ]
+    keyboard.append([InlineKeyboardButton(u("✏️ Custom Amount"), callback_data="wamt_custom")])
     keyboard.append([InlineKeyboardButton(u("🔙 Back to Main Menu"), callback_data="back_main")])
 
     msg = (
@@ -455,8 +457,60 @@ async def menu_wallet(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
     await safe_edit(query, context, msg, keyboard)
 
+async def wallet_custom_amount(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """User tapped Custom Amount — ask them to type it."""
+    query = update.callback_query
+    await query.answer()
+    context.user_data["awaiting_recharge"] = True
+    keyboard = [[InlineKeyboardButton(u("❌ Cancel"), callback_data="menu_wallet")]]
+    await safe_edit(query, context,
+        f"✏️ {b('Custom Recharge Amount')}\n\n"
+        f"{b('Send The Amount You Want To Add To Your Wallet')}\n"
+        f"{u('Example')}: <code>75</code>\n\n"
+        f"{u('Minimum: ₹1')}",
+        keyboard)
+
+async def handle_custom_recharge_input(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle the custom amount typed by the user."""
+    if not context.user_data.get("awaiting_recharge"):
+        return
+    text = update.message.text.strip()
+    try:
+        amt = int(text)
+        if amt < 1:
+            raise ValueError
+    except ValueError:
+        await update.message.reply_text(
+            f"❌ {b('Invalid Amount.')} {u('Please send a number, e.g.')} <code>75</code>",
+            parse_mode=ParseMode.HTML,
+        )
+        return
+
+    context.user_data.pop("awaiting_recharge", None)
+
+    keyboard = [
+        [
+            InlineKeyboardButton(u("Razorpay [UPI/ CARDS]"), callback_data=f"wrzp_{amt}"),
+            InlineKeyboardButton(u("Pay with QR"),            callback_data=f"wqr_{amt}"),
+        ],
+        [
+            InlineKeyboardButton(u("Pay with Crypto"), callback_data=f"wcrypto_{amt}"),
+            InlineKeyboardButton(u("Coming Soon"),     callback_data="dummy_placeholder"),
+        ],
+        [InlineKeyboardButton(u("Support"), url=f"https://t.me/{ADMIN_USERNAME}")],
+        [InlineKeyboardButton(u("🔙 Back"), callback_data="menu_wallet")],
+    ]
+    await update.message.reply_text(
+        f"💳 {b('Wallet Recharge')}\n\n"
+        f"{b('Amount')}: ₹{amt}\n\n"
+        f"{b('Choose Your Payment Method')} 👇\n"
+        f"{b('Once Payment Is Done Your Wallet Will Be Credited Automatically')}",
+        reply_markup=InlineKeyboardMarkup(keyboard),
+        parse_mode=ParseMode.HTML,
+    )
+
 async def wallet_amount_selected(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """User picked a recharge amount — show payment methods."""
+    """User picked a preset recharge amount — show payment methods."""
     query = update.callback_query
     await query.answer()
     amt = int(query.data[len("wamt_"):])
@@ -742,19 +796,24 @@ async def menu_refer(update: Update, context: ContextTypes.DEFAULT_TYPE):
     bot_name = context.bot.username
     ref_link = f"https://t.me/{bot_name}?start=ref_{user.id}"
 
-    keyboard = [[InlineKeyboardButton(u("🔙 Back to Main Menu"), callback_data="back_main")]]
+    share_text = urllib.parse.quote(
+        f"🔥 Join this premium subscription bot and get exclusive content!\n\n"
+        f"Use my link to join 👇"
+    )
+    share_url = f"https://t.me/share/url?url={urllib.parse.quote(ref_link)}&text={share_text}"
+    keyboard = [
+        [InlineKeyboardButton(u("📤 Share Referral Link"), url=share_url)],
+        [InlineKeyboardButton(u("🔙 Back to Main Menu"), callback_data="back_main")],
+    ]
     msg = (
         f"👥 {b('Refer and Earn')}\n\n"
         f"{b('Share Your Referral Link And Earn ₹1 For Every New Member Who Joins!')}\n\n"
-        f"🔗 {b('Your Referral Link')}:\n"
-        f"<code>{ref_link}</code>\n\n"
         f"💰 {b('Total Referral Earned')}: ₹{rb}\n\n"
         f"📌 {b('How It Works')}:\n"
-        f"  1. {b('Share your referral link')}\n"
-        f"  2. {b('New user joins via your link')}\n"
-        f"  3. {b('₹1 is instantly credited to your referral balance')}\n"
-        f"  4. {b('Use referral balance to buy subscriptions!')}\n\n"
-        f"⚡ {b('Tap the link above to copy it')}"
+        f"  1. {b('Tap Share Referral Link below')}\n"
+        f"  2. {b('Forward to your friends or groups')}\n"
+        f"  3. {b('₹1 is instantly credited when they join')}\n"
+        f"  4. {b('Use referral balance to buy subscriptions!')}"
     )
     await safe_edit(query, context, msg, keyboard)
 
@@ -992,6 +1051,7 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif data.startswith("sample_"):      await sample_content(update, context)
     elif data.startswith("buy_"):         await buy_plan(update, context)
     elif data.startswith("wpay_"):        await wallet_pay_plan(update, context)
+    elif data == "wamt_custom":           await wallet_custom_amount(update, context)
     elif data.startswith("wamt_"):        await wallet_amount_selected(update, context)
     elif data.startswith("wrzp_"):        await wallet_pay_razorpay(update, context)
     elif data.startswith("wqr_"):         await wallet_pay_qr(update, context)
