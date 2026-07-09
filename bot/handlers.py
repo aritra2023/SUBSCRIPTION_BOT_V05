@@ -81,6 +81,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"👇 {b('Use The Buttons Below To Navigate')}"
     )
     inline = [
+        [InlineKeyboardButton(u("🛍️ Available Subscriptions"), callback_data="menu_plans")],
         [
             InlineKeyboardButton(u("👤 About"),          callback_data="menu_about"),
             InlineKeyboardButton(u("💰 Wallet"),         callback_data="menu_wallet"),
