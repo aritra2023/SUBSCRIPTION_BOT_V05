@@ -14,27 +14,69 @@ from config import (
     ADMIN_USERNAME, ADMIN_IDS, PREMIUM_CHANNEL_LINK,
     CRYPTO_NETWORK, CRYPTO_ADDRESS,
     razorpay_client, users_col, pays_col, plans_col,
-    pending_payments, pending_broadcasts,
+    pending_payments, pending_recharges, pending_broadcasts,
     get_all_plans, get_plan,
 )
-from utils import u, b, is_admin, safe_edit, save_user, record_payment
+from utils import (
+    u, b, is_admin, safe_edit, save_user, record_payment,
+    get_wallet, credit_wallet, deduct_wallet,
+)
+import logging
+logger = logging.getLogger(__name__)
 
-# ── /start ────────────────────────────────────────────────────────────────────
+# ── Recharge amount presets ────────────────────────────────────────────────────
+RECHARGE_AMOUNTS = [199, 299, 399, 499, 699, 999]
+
+# ── /start ─────────────────────────────────────────────────────────────────────
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
-    save_user(user)
+
+    # Handle referral deep link: /start ref_USERID
+    referred_by = None
+    if context.args:
+        arg = context.args[0]
+        if arg.startswith("ref_"):
+            try:
+                referred_by = int(arg[4:])
+                if referred_by == user.id:
+                    referred_by = None  # can't refer yourself
+            except ValueError:
+                referred_by = None
+
+    is_new = save_user(user, referred_by=referred_by)
+
+    # Credit ₹1 referral bonus if this user is brand new and has a valid referrer
+    if is_new and referred_by:
+        existing_referrer = users_col.find_one({"user_id": referred_by})
+        if existing_referrer:
+            credit_wallet(referred_by, 1, field="referral_balance")
+            try:
+                await context.bot.send_message(
+                    chat_id=referred_by,
+                    text=f"🎉 {b('Referral Bonus!')}\n\n"
+                         f"{b('Someone joined using your referral link!')}\n"
+                         f"{b('₹1 has been credited to your referral balance.')} 💰",
+                    parse_mode=ParseMode.HTML,
+                )
+            except Exception:
+                pass
+
     keyboard = [
-        [InlineKeyboardButton(u("Available Subscription"),         callback_data="menu_plans")],
-        [InlineKeyboardButton(u("Your Paid Subscriptions"),        callback_data="menu_mysubs")],
+        [InlineKeyboardButton(u("Available Subscription"), callback_data="menu_plans")],
+        [
+            InlineKeyboardButton(u("About"),  callback_data="menu_about"),
+            InlineKeyboardButton(u("Wallet"), callback_data="menu_wallet"),
+        ],
         [
             InlineKeyboardButton(u("Support"), callback_data="menu_support"),
             InlineKeyboardButton(u("Creator"), callback_data="menu_dev"),
         ],
+        [InlineKeyboardButton(u("Refer and Earn 💸"), callback_data="menu_refer")],
     ]
     msg = (
         f"{b('Hello Members Welcome To The Premium Channel Subscription Bot')} 🖥\n\n"
         f"{b('Here You Can Subscribe To Premium Channels And Access Exclusive Content Without Any Delay')}\n\n"
-        f"{b('Make Payment And Get Your Premium Link Right Now In Seconds')}\n\n"
+        f"{b('Recharge Your Wallet And Get Your Premium Link Right Now In Seconds')}\n\n"
         f"{b('Please Select The Premium You Want To Buy')} 👇"
     )
     rm = InlineKeyboardMarkup(keyboard)
@@ -43,7 +85,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     else:
         await safe_edit(update.callback_query, context, msg, keyboard)
 
-# ── /stats (admin) ────────────────────────────────────────────────────────────
+# ── /stats (admin) ─────────────────────────────────────────────────────────────
 async def cmd_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_admin(update.effective_user):
         await update.message.reply_text(b("❌ Admin only command."), parse_mode=ParseMode.HTML)
@@ -71,7 +113,7 @@ async def cmd_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
     await update.message.reply_text(msg, parse_mode=ParseMode.HTML)
 
-# ── /broadcast (admin) ────────────────────────────────────────────────────────
+# ── /broadcast (admin) ─────────────────────────────────────────────────────────
 async def cmd_broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_admin(update.effective_user):
         await update.message.reply_text(b("❌ Admin only command."), parse_mode=ParseMode.HTML)
@@ -125,7 +167,7 @@ async def bc_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
             success += 1
         except Exception as e:
-            import logging; logging.getLogger(__name__).warning(f"Broadcast failed for {usr['user_id']}: {e}")
+            logger.warning(f"Broadcast failed for {usr['user_id']}: {e}")
             fail += 1
         if (i + 1) % 20 == 0:
             try:
@@ -148,7 +190,7 @@ async def bc_cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     pending_broadcasts.pop(query.from_user.id, None)
     await query.edit_message_text(f"❌ {b('Broadcast cancelled.')}", parse_mode=ParseMode.HTML)
 
-# ── /check user_id amount (admin) ─────────────────────────────────────────────
+# ── /check user_id amount (admin) ──────────────────────────────────────────────
 async def cmd_check(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_admin(update.effective_user):
         await update.message.reply_text(b("❌ Admin only command."), parse_mode=ParseMode.HTML)
@@ -184,7 +226,7 @@ async def cmd_check(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     "amount": item.get("amount", 0) // 100,
                 })
     except Exception as e:
-        import logging; logging.getLogger(__name__).warning(f"/check Razorpay error: {e}")
+        logger.warning(f"/check Razorpay error: {e}")
 
     user_doc = users_col.find_one({"user_id": target_uid}, {"_id": 0})
     lines = [f"🔍 {b('Payment Check')}\n"]
@@ -195,6 +237,8 @@ async def cmd_check(update: Update, context: ContextTypes.DEFAULT_TYPE):
         un = user_doc.get("username")
         if un:
             lines.append(f"{b('Username')}: @{un}")
+        lines.append(f"{b('Wallet Balance')}: ₹{user_doc.get('wallet_balance', 0)}")
+        lines.append(f"{b('Referral Balance')}: ₹{user_doc.get('referral_balance', 0)}")
     lines.append(f"{b('Amount Queried')}: ₹{amount_inp}\n")
     if mongo_pays:
         lines.append(f"✅ {b('MongoDB Records')}: {len(mongo_pays)} {u('payment(s) found')}")
@@ -212,7 +256,7 @@ async def cmd_check(update: Update, context: ContextTypes.DEFAULT_TYPE):
         lines.append(f"❌ {b('Razorpay')}: {u('No matching payment links found')}")
     await update.message.reply_text("\n".join(lines), parse_mode=ParseMode.HTML)
 
-# ── Menu handlers ─────────────────────────────────────────────────────────────
+# ── Menu: Available Plans ──────────────────────────────────────────────────────
 async def menu_plans(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
@@ -267,6 +311,7 @@ async def sample_content(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
     await safe_edit(query, context, msg, keyboard)
 
+# ── Buy plan: wallet-based ─────────────────────────────────────────────────────
 async def buy_plan(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
@@ -275,88 +320,219 @@ async def buy_plan(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not plan:
         await safe_edit(query, context, b("Plan not found."), [])
         return
-    keyboard = [
-        [
-            InlineKeyboardButton(u("Razorpay [UPI/ CARDS]"), callback_data=f"rzp_{pid}"),
-            InlineKeyboardButton(u("Pay with QR"),            callback_data=f"qr_{pid}"),
-        ],
-        [
-            InlineKeyboardButton(u("Pay with Crypto"), callback_data=f"crypto_{pid}"),
-            InlineKeyboardButton(u("Coming Soon"),     callback_data="dummy_placeholder"),
-        ],
-        [InlineKeyboardButton(u("Support"), url=f"https://t.me/{ADMIN_USERNAME}")],
-        [InlineKeyboardButton(u("🔙 Back"), callback_data=f"showplan_{pid}")],
-    ]
-    msg = (
-        f"{b('Choose your payment method')}:\n\n"
-        f"{b('Channel')}: {b(plan['channel'])}\n"
-        f"{b('Plan')}: {b('Permanent')}\n"
-        f"{b('Amount')}: ₹{plan['price']}"
-    )
+
+    wb, rb = get_wallet(query.from_user.id)
+    total  = wb + rb
+    price  = plan["price"]
+
+    if total >= price:
+        keyboard = [
+            [InlineKeyboardButton(
+                f"✅ {u('Pay')} ₹{price} {u('from Wallet')}",
+                callback_data=f"wpay_{pid}"
+            )],
+            [InlineKeyboardButton(u("💳 Recharge Wallet"), callback_data="menu_wallet")],
+            [InlineKeyboardButton(u("Support"), url=f"https://t.me/{ADMIN_USERNAME}")],
+            [InlineKeyboardButton(u("🔙 Back"), callback_data=f"showplan_{pid}")],
+        ]
+        msg = (
+            f"💰 {b('Pay From Wallet')}\n\n"
+            f"{b('Channel')}: {b(plan['channel'])}\n"
+            f"{b('Plan')}: {b('Permanent')}\n"
+            f"{b('Amount')}: ₹{price}\n\n"
+            f"{b('Your Wallet')}:\n"
+            f"  • {b('Recharge Balance')}: ₹{wb}\n"
+            f"  • {b('Referral Balance')}: ₹{rb}\n"
+            f"  • {b('Total')}: ₹{total}\n\n"
+            f"{b('Tap Below To Complete Your Purchase')} 👇"
+        )
+    else:
+        need   = price - total
+        keyboard = [
+            [InlineKeyboardButton(u("💳 Recharge Wallet"), callback_data="menu_wallet")],
+            [InlineKeyboardButton(u("Support"), url=f"https://t.me/{ADMIN_USERNAME}")],
+            [InlineKeyboardButton(u("🔙 Back"), callback_data=f"showplan_{pid}")],
+        ]
+        msg = (
+            f"❌ {b('Insufficient Wallet Balance')}\n\n"
+            f"{b('Channel')}: {b(plan['channel'])}\n"
+            f"{b('Amount Required')}: ₹{price}\n\n"
+            f"{b('Your Wallet')}:\n"
+            f"  • {b('Recharge Balance')}: ₹{wb}\n"
+            f"  • {b('Referral Balance')}: ₹{rb}\n"
+            f"  • {b('Total')}: ₹{total}\n\n"
+            f"⚠️ {b('You Need')} ₹{need} {b('More To Buy This Plan')}\n"
+            f"{b('Please Recharge Your Wallet First')} 👇"
+        )
+
     await safe_edit(query, context, msg, keyboard)
 
-# ── Payment handlers ───────────────────────────────────────────────────────────
-async def pay_razorpay(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def wallet_pay_plan(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Deduct from wallet and grant access."""
     query = update.callback_query
     await query.answer()
-    pid  = query.data[len("rzp_"):]
+    pid  = query.data[len("wpay_"):]
     plan = get_plan(pid)
     if not plan:
         await safe_edit(query, context, b("Plan not found."), [])
         return
+
+    success = deduct_wallet(query.from_user.id, plan["price"])
+    if not success:
+        keyboard = [
+            [InlineKeyboardButton(u("💳 Recharge Wallet"), callback_data="menu_wallet")],
+            [InlineKeyboardButton(u("🔙 Back"), callback_data=f"buy_{pid}")],
+        ]
+        await safe_edit(query, context,
+            f"❌ {b('Insufficient Balance')}\n\n"
+            f"{b('Please Recharge Your Wallet And Try Again.')}",
+            keyboard)
+        return
+
+    ref_id = f"wallet_{uuid.uuid4().hex[:12]}"
+    record_payment(query.from_user.id, plan, ref_id, "wallet")
+
+    keyboard = [
+        [InlineKeyboardButton(u("🔓 Join Premium Channel"), url=plan.get("channel_link", PREMIUM_CHANNEL_LINK))],
+        [InlineKeyboardButton(u("Support"),               url=f"https://t.me/{ADMIN_USERNAME}")],
+        [InlineKeyboardButton(u("🏠 Back to Main Menu"),   callback_data="back_main")],
+    ]
+    wb, rb = get_wallet(query.from_user.id)
+    msg = (
+        f"✅ {b('Payment Successful!')}\n\n"
+        f"🎉 {b('Welcome To')} {b(plan['channel'])}!\n\n"
+        f"₹{plan['price']} {b('Deducted From Your Wallet')}\n"
+        f"{b('Remaining Balance')}: ₹{wb + rb}\n\n"
+        f"{b('Click The Button Below To Join Your Premium Channel')} 👇\n\n"
+        f"{b('If You Face Any Issue Contact')}: @{ADMIN_USERNAME}"
+    )
+    await safe_edit(query, context, msg, keyboard)
+
+# ── Menu: About ────────────────────────────────────────────────────────────────
+async def menu_about(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    user = query.from_user
+    wb, rb = get_wallet(user.id)
+    username_str = f"@{user.username}" if user.username else u("Not set")
+    keyboard = [[InlineKeyboardButton(u("🔙 Back to Main Menu"), callback_data="back_main")]]
+    msg = (
+        f"👤 {b('Your Profile')}\n\n"
+        f"🆔 {b('Telegram ID')}: <code>{user.id}</code>\n"
+        f"👤 {b('Username')}: {username_str}\n\n"
+        f"💰 {b('Wallet')}\n"
+        f"  • {b('Recharge Balance')}: ₹{wb}\n"
+        f"  • {b('Referral Balance')}: ₹{rb}\n"
+        f"  • {b('Total Balance')}: ₹{wb + rb}"
+    )
+    await safe_edit(query, context, msg, keyboard)
+
+# ── Menu: Wallet ───────────────────────────────────────────────────────────────
+async def menu_wallet(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    user = query.from_user
+    wb, rb = get_wallet(user.id)
+    total = wb + rb
+
+    amt_buttons = [
+        InlineKeyboardButton(f"₹{amt}", callback_data=f"wamt_{amt}")
+        for amt in RECHARGE_AMOUNTS
+    ]
+    keyboard = [
+        amt_buttons[i:i+3] for i in range(0, len(amt_buttons), 3)
+    ]
+    keyboard.append([InlineKeyboardButton(u("🔙 Back to Main Menu"), callback_data="back_main")])
+
+    msg = (
+        f"💳 {b('Your Wallet')}\n\n"
+        f"  • {b('Recharge Balance')}: ₹{wb}\n"
+        f"  • {b('Referral Balance')}: ₹{rb}\n"
+        f"  • {b('Total Balance')}: ₹{total}\n\n"
+        f"━━━━━━━━━━━━━━━━━━━━\n"
+        f"💸 {b('Recharge Wallet')}\n"
+        f"{b('Select An Amount To Add To Your Wallet')} 👇"
+    )
+    await safe_edit(query, context, msg, keyboard)
+
+async def wallet_amount_selected(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """User picked a recharge amount — show payment methods."""
+    query = update.callback_query
+    await query.answer()
+    amt = int(query.data[len("wamt_"):])
+
+    keyboard = [
+        [
+            InlineKeyboardButton(u("Razorpay [UPI/ CARDS]"), callback_data=f"wrzp_{amt}"),
+            InlineKeyboardButton(u("Pay with QR"),            callback_data=f"wqr_{amt}"),
+        ],
+        [
+            InlineKeyboardButton(u("Pay with Crypto"), callback_data=f"wcrypto_{amt}"),
+            InlineKeyboardButton(u("Coming Soon"),     callback_data="dummy_placeholder"),
+        ],
+        [InlineKeyboardButton(u("Support"), url=f"https://t.me/{ADMIN_USERNAME}")],
+        [InlineKeyboardButton(u("🔙 Back"), callback_data="menu_wallet")],
+    ]
+    msg = (
+        f"💳 {b('Wallet Recharge')}\n\n"
+        f"{b('Amount')}: ₹{amt}\n\n"
+        f"{b('Choose Your Payment Method')} 👇\n"
+        f"{b('Once Payment Is Done Your Wallet Will Be Credited Automatically')}"
+    )
+    await safe_edit(query, context, msg, keyboard)
+
+# ── Wallet recharge: Razorpay ──────────────────────────────────────────────────
+async def wallet_pay_razorpay(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    amt = int(query.data[len("wrzp_"):])
+
     try:
         pl = razorpay_client.payment_link.create({
-            "amount":          plan["price"] * 100,
+            "amount":          amt * 100,
             "currency":        "INR",
             "accept_partial":  False,
-            "description":     plan.get("pay_description", f"Subscription: {plan['channel']}"),
+            "description":     f"Wallet Recharge: ₹{amt}",
             "notify":          {"sms": False, "email": False},
             "reminder_enable": False,
-            "notes":           {"plan_id": pid, "user_id": str(query.from_user.id)},
+            "notes":           {"type": "wallet_recharge", "user_id": str(query.from_user.id), "amount": amt},
         })
         short_url = pl.get("short_url", "")
         link_id   = pl.get("id", "")
-        pending_payments[query.from_user.id] = {
-            "pid": pid, "type": "link", "ref_id": link_id,
-            "amount": plan["price"], "timestamp": time.time(),
-            "short_url": short_url,
+        pending_recharges[query.from_user.id] = {
+            "amount": amt, "type": "link", "ref_id": link_id,
+            "timestamp": time.time(), "short_url": short_url,
         }
         keyboard = [
             [InlineKeyboardButton(u("💳 Open Payment Page"), url=short_url)],
-            [InlineKeyboardButton(u("✅ I Have Paid"),        callback_data=f"paid_{pid}_link_{link_id}")],
+            [InlineKeyboardButton(u("✅ I Have Paid"),        callback_data=f"wdone_link_{link_id}_{amt}")],
             [
                 InlineKeyboardButton(u("Support"), url=f"https://t.me/{ADMIN_USERNAME}"),
-                InlineKeyboardButton(u("❌ Cancel"), callback_data=f"showplan_{pid}"),
+                InlineKeyboardButton(u("❌ Cancel"), callback_data="menu_wallet"),
             ],
         ]
         msg = (
             f"💳 {b('Razorpay Payment')}\n\n"
-            f"{b('Channel')}: {b(plan['channel'])}\n"
-            f"{b('Plan')}: {b('Permanent')}\n"
-            f"{b('Amount')}: ₹{plan['price']}\n\n"
+            f"{b('Recharge Amount')}: ₹{amt}\n\n"
             f"{b('Click The Button Below To Open The Payment Page')}\n"
             f"{b('Once Paid, Click I Have Paid Button')}"
         )
         await safe_edit(query, context, msg, keyboard)
     except Exception as e:
-        import logging; logging.getLogger(__name__).error(f"Razorpay link error: {e}")
+        logger.error(f"Wallet Razorpay link error: {e}")
         await safe_edit(query, context,
             f"❌ {b('Error creating payment. Please try again or contact support.')}\n@{ADMIN_USERNAME}",
             [
                 [InlineKeyboardButton(u("Support"), url=f"https://t.me/{ADMIN_USERNAME}")],
-                [InlineKeyboardButton(u("🔙 Back"), callback_data=f"buy_{pid}")],
+                [InlineKeyboardButton(u("🔙 Back"), callback_data=f"wamt_{amt}")],
             ])
 
-async def pay_qr(update: Update, context: ContextTypes.DEFAULT_TYPE):
+# ── Wallet recharge: QR ────────────────────────────────────────────────────────
+async def wallet_pay_qr(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
-    pid  = query.data[len("qr_"):]
-    plan = get_plan(pid)
-    if not plan:
-        await safe_edit(query, context, b("Plan not found."), [])
-        return
+    amt = int(query.data[len("wqr_"):])
 
-    # Animated loading while QR generates
     _frames = [
         f"⏳ {b('Generating QR')}",
         f"⏳ {b('Generating QR')} ·",
@@ -364,7 +540,7 @@ async def pay_qr(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"⏳ {b('Generating QR')} · · ·",
     ]
     await safe_edit(query, context, _frames[0], [])
-    _msg = query.message  # same chat/message id — safe to edit in loop
+    _msg = query.message
 
     async def _animate():
         for _i in range(1, 9999):
@@ -375,17 +551,16 @@ async def pay_qr(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 pass
 
     _anim = asyncio.create_task(_animate())
-
     buf, qr_id, gen_ok = None, "", False
     try:
         from PIL import Image as PilImage
         qr_resp = razorpay_client.qrcode.create({
             "type":           "upi_qr",
-            "name":           "Premium Subscription",
+            "name":           "Wallet Recharge",
             "usage":          "single_use",
             "fixed_amount":   True,
-            "payment_amount": plan["price"] * 100,
-            "description":    plan.get("pay_description", f"Subscription: {plan['channel']}"),
+            "payment_amount": amt * 100,
+            "description":    f"Wallet Recharge: ₹{amt}",
             "close_by":       int(time.time()) + 900,
         })
         qr_id     = qr_resp.get("id", "")
@@ -400,7 +575,7 @@ async def pay_qr(update: Update, context: ContextTypes.DEFAULT_TYPE):
         buf.seek(0)
         gen_ok = True
     except Exception as e:
-        import logging; logging.getLogger(__name__).error(f"QR generation failed: {e}")
+        logger.error(f"Wallet QR generation failed: {e}")
     finally:
         _anim.cancel()
         try:
@@ -409,25 +584,22 @@ async def pay_qr(update: Update, context: ContextTypes.DEFAULT_TYPE):
             pass
 
     if gen_ok and buf:
-        pending_payments[query.from_user.id] = {
-            "pid": pid, "type": "qr", "ref_id": qr_id,
-            "amount": plan["price"], "timestamp": time.time(),
+        pending_recharges[query.from_user.id] = {
+            "amount": amt, "type": "qr", "ref_id": qr_id, "timestamp": time.time(),
         }
         keyboard = [
-            [InlineKeyboardButton(u("✅ I've Completed Payment"), callback_data=f"paid_{pid}_qr_{qr_id}")],
+            [InlineKeyboardButton(u("✅ I've Completed Payment"), callback_data=f"wdone_qr_{qr_id}_{amt}")],
             [
                 InlineKeyboardButton(u("Support"), url=f"https://t.me/{ADMIN_USERNAME}"),
-                InlineKeyboardButton(u("❌ Cancel"), callback_data=f"showplan_{pid}"),
+                InlineKeyboardButton(u("❌ Cancel"), callback_data="menu_wallet"),
             ],
         ]
         caption = (
-            f"📱 {b('Upi Payment Information')}\n\n"
-            f"{b('Channel')}: {b(plan['channel'])}\n"
-            f"{b('Plan')}: {b('Permanent')}\n"
-            f"{b('Amount')}: ₹{plan['price']}\n\n"
+            f"📱 {b('UPI Wallet Recharge')}\n\n"
+            f"{b('Amount')}: ₹{amt}\n\n"
             f"📲 {b('Scan The QR Code Above Using Any UPI App')}\n"
             f"{b('Once Paid, Tap I ve Completed Payment')} ✅ {b('Below')}\n\n"
-            f"⚠️ {b('If You Are Not Able To Pay In This QR Code Please Try With Paytm, PhonePay Or Any Other Upi App, You May Face Issue With Google Pay App')}\n\n"
+            f"⚠️ {b('If You Are Not Able To Pay In This QR Code Please Try With Paytm, PhonePay Or Any Other Upi App')}\n\n"
             f"⏳ {b('This QR Will Expire In 15 Minutes')}"
         )
         chat_id = query.message.chat_id
@@ -441,41 +613,35 @@ async def pay_qr(update: Update, context: ContextTypes.DEFAULT_TYPE):
             parse_mode=ParseMode.HTML,
         )
     else:
-        await buy_plan(update, context)
+        await wallet_amount_selected(update, context)
 
+# ── Wallet recharge: Crypto ────────────────────────────────────────────────────
 def get_usdt_inr_rate():
     url = "https://api.coingecko.com/api/v3/simple/price?ids=tether&vs_currencies=inr"
     with urllib.request.urlopen(url, timeout=6) as resp:
         data = json.loads(resp.read().decode())
     return float(data["tether"]["inr"])
 
-async def pay_crypto(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def wallet_pay_crypto(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
-    pid  = query.data[len("crypto_"):]
-    plan = get_plan(pid)
-    if not plan:
-        await safe_edit(query, context, b("Plan not found."), [])
-        return
+    amt = int(query.data[len("wcrypto_"):])
 
     await safe_edit(query, context, f"⏳ {b('Fetching Live Rate...')}", [])
-
     try:
         rate        = get_usdt_inr_rate()
-        usdt_amount = plan["price"] / rate
-        amount_line = f"{b('Amount')}: {usdt_amount:.2f} USDT  (₹{plan['price']} @ ₹{rate:.2f}/USDT)"
+        usdt_amount = amt / rate
+        amount_line = f"{b('Amount')}: {usdt_amount:.2f} USDT  (₹{amt} @ ₹{rate:.2f}/USDT)"
     except Exception as e:
-        import logging; logging.getLogger(__name__).error(f"USDT rate fetch failed: {e}")
-        amount_line = f"{b('Amount')}: ₹{plan['price']} {b('(Live Rate Unavailable, Contact Admin For USDT Amount)')}"
+        logger.error(f"USDT rate fetch failed: {e}")
+        amount_line = f"{b('Amount')}: ₹{amt} {b('(Live Rate Unavailable, Contact Admin For USDT Amount)')}"
 
     keyboard = [
         [InlineKeyboardButton(u("Contact Admin"), url=f"https://t.me/{ADMIN_USERNAME}")],
-        [InlineKeyboardButton(u("🔙 Back"),        callback_data=f"buy_{pid}")],
+        [InlineKeyboardButton(u("🔙 Back"),        callback_data=f"wamt_{amt}")],
     ]
     msg = (
-        f"{b('Pay With Crypto (USDT)')}\n\n"
-        f"{b('Channel')}: {b(plan['channel'])}\n"
-        f"{b('Plan')}: {b('Permanent')}\n"
+        f"{b('Wallet Recharge Via Crypto (USDT)')}\n\n"
         f"{amount_line}\n\n"
         f"{b('Network')}: {b(CRYPTO_NETWORK)}\n"
         f"💳 {b('Wallet Address')}:\n\n<code>{CRYPTO_ADDRESS}</code>\n\n"
@@ -485,99 +651,79 @@ async def pay_crypto(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
     await safe_edit(query, context, msg, keyboard)
 
-async def dummy_placeholder(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer(u("Coming soon!"), show_alert=True)
-
-async def i_have_paid(update: Update, context: ContextTypes.DEFAULT_TYPE):
+# ── Wallet recharge verification ───────────────────────────────────────────────
+async def wallet_done(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Verify wallet recharge payment and credit balance."""
     query = update.callback_query
     await query.answer()
-    rest  = query.data[len("paid_"):]
+
+    # callback_data: wdone_{type}_{ref_id}_{amount}
+    rest  = query.data[len("wdone_"):]
     parts = rest.split("_", 2)
-    pid   = parts[0]
-    ptype = parts[1] if len(parts) > 1 else "link"
-    plan  = get_plan(pid)
+    ptype = parts[0]                   # link or qr
+    tail  = parts[1] if len(parts) > 1 else ""
+    # amount is the last token after the last underscore
+    tail_parts = tail.rsplit("_", 1)
+    ref_id_from_cb = tail_parts[0] if len(tail_parts) > 1 else tail
+    amt_from_cb    = int(tail_parts[1]) if len(tail_parts) > 1 and tail_parts[1].isdigit() else 0
 
+    pending = pending_recharges.get(query.from_user.id)
+    stored_ref  = pending.get("ref_id", "") if pending else ref_id_from_cb
+    stored_type = pending.get("type", ptype) if pending else ptype
+    stored_amt  = pending.get("amount", amt_from_cb) if pending else amt_from_cb
+
+    await safe_edit(query, context, f"🔄 {b('Verifying Payment...')}", [])
+
+    verified = False
     try:
-        pending = pending_payments.get(query.from_user.id)
-        if not pending:
-            raise ValueError("no_pending")
-
-        stored_ref  = pending.get("ref_id", "")
-        stored_type = pending.get("type", "link")
-        stored_pid  = pending.get("pid", "")
-
-        if stored_pid and stored_pid != pid:
-            raise ValueError("plan_mismatch")
-        if not stored_ref:
-            raise ValueError("no_ref")
-
-        await safe_edit(query, context, f"🔄 {b('Checking Payment...')}", [])
-
-        verified = False
-
         if stored_type == "qr":
-            # ── QR: check via Razorpay QR payments API ────────────────────────
             payments = razorpay_client.qrcode.fetch_all_payments(stored_ref)
             for item in (payments.get("items") or []):
                 if item.get("status") == "captured":
                     verified = True
                     break
         else:
-            # ── Link: check payment link status ───────────────────────────────
             details = razorpay_client.payment_link.fetch(stored_ref)
             if details.get("status") == "paid":
                 verified = True
-
-        if verified and plan:
-            pending_payments.pop(query.from_user.id, None)
-            newly_inserted = record_payment(query.from_user.id, plan, stored_ref, stored_type)
-            if not newly_inserted:
-                # Already recorded — still give them the link (idempotent grant)
-                keyboard = [
-                    [InlineKeyboardButton(u("🔓 Join Premium Channel"), url=plan.get("channel_link", PREMIUM_CHANNEL_LINK))],
-                    [InlineKeyboardButton(u("Support"),               url=f"https://t.me/{ADMIN_USERNAME}")],
-                    [InlineKeyboardButton(u("🏠 Back to Main Menu"),    callback_data="back_main")],
-                ]
-                await safe_edit(
-                    query, context,
-                    f"✅ {b('Payment Already Recorded')}\n\n"
-                    f"{b('Your subscription is active. Click below to join.')} 👇",
-                    keyboard,
-                )
-                return
-            keyboard = [
-                [InlineKeyboardButton(u("🔓 Join Premium Channel"), url=plan.get("channel_link", PREMIUM_CHANNEL_LINK))],
-                [InlineKeyboardButton(u("Support"),               url=f"https://t.me/{ADMIN_USERNAME}")],
-                [InlineKeyboardButton(u("🏠 Back to Main Menu"),    callback_data="back_main")],
-            ]
-            msg = (
-                f"✅ {b('Payment Verified Successfully!')}\n\n"
-                f"🎉 {b('Welcome To')} {b(plan['channel'])}!\n\n"
-                f"{b('Click The Button Below To Join Your Premium Channel')} 👇\n\n"
-                f"{b('If You Face Any Issue Contact')}: @{ADMIN_USERNAME}\n\n"
-                f"{b('Thank you for your purchase!')}"
-            )
-            await safe_edit(query, context, msg, keyboard)
-        else:
-            raise ValueError("not_verified")
     except Exception as e:
-        import logging; logging.getLogger(__name__).warning(f"Payment check: {e}")
-        pending_info = pending_payments.get(query.from_user.id)
-        if ptype == "qr":
+        logger.warning(f"Wallet payment check: {e}")
+
+    if verified:
+        pending_recharges.pop(query.from_user.id, None)
+        credit_wallet(query.from_user.id, stored_amt, field="wallet_balance")
+        wb, rb = get_wallet(query.from_user.id)
+        keyboard = [
+            [InlineKeyboardButton(u("📦 Browse Subscriptions"), callback_data="menu_plans")],
+            [InlineKeyboardButton(u("💳 Wallet"),               callback_data="menu_wallet")],
+            [InlineKeyboardButton(u("🏠 Back to Main Menu"),    callback_data="back_main")],
+        ]
+        msg = (
+            f"✅ {b('Wallet Recharged Successfully!')}\n\n"
+            f"💰 {b('Amount Added')}: ₹{stored_amt}\n\n"
+            f"{b('Your Wallet')}:\n"
+            f"  • {b('Recharge Balance')}: ₹{wb}\n"
+            f"  • {b('Referral Balance')}: ₹{rb}\n"
+            f"  • {b('Total Balance')}: ₹{wb + rb}\n\n"
+            f"{b('You Can Now Buy Subscriptions')} 👇"
+        )
+        await safe_edit(query, context, msg, keyboard)
+    else:
+        if stored_type == "qr":
             retry_row = [
-                InlineKeyboardButton(u("🔄 Try Again"),     callback_data=f"paid_{pid}_qr_"),
-                InlineKeyboardButton(u("📱 Regenerate QR"), callback_data=f"qr_{pid}"),
+                InlineKeyboardButton(u("🔄 Try Again"),     callback_data=query.data),
+                InlineKeyboardButton(u("📱 Regenerate QR"), callback_data=f"wqr_{stored_amt}"),
             ]
         else:
-            pay_url = pending_info.get("short_url", "") if pending_info else ""
-            retry_row = [InlineKeyboardButton(u("🔄 Try Again"), callback_data=f"paid_{pid}_link_")]
+            pay_url = pending.get("short_url", "") if pending else ""
+            retry_row = [InlineKeyboardButton(u("🔄 Try Again"), callback_data=query.data)]
             if pay_url:
                 retry_row.append(InlineKeyboardButton(u("💳 Payment Page"), url=pay_url))
+
         keyboard = [
             retry_row,
             [InlineKeyboardButton(u("Support"), url=f"https://t.me/{ADMIN_USERNAME}")],
-            [InlineKeyboardButton(u("🔙 Back to Main Menu"), callback_data="back_main")],
+            [InlineKeyboardButton(u("🔙 Back"), callback_data="menu_wallet")],
         ]
         msg = (
             f"❌ {b('Payment Not Verified Yet')}\n\n"
@@ -587,27 +733,32 @@ async def i_have_paid(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         await safe_edit(query, context, msg, keyboard)
 
-# ── My Subscriptions / Support / Developer ────────────────────────────────────
-async def my_subscriptions(update: Update, context: ContextTypes.DEFAULT_TYPE):
+# ── Menu: Refer and Earn ───────────────────────────────────────────────────────
+async def menu_refer(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
-    uid  = query.from_user.id
-    pays = list(pays_col.find({"user_id": uid}, {"_id": 0, "plan_name": 1, "amount": 1, "paid_at": 1}))
+    user     = query.from_user
+    _, rb    = get_wallet(user.id)
+    bot_name = context.bot.username
+    ref_link = f"https://t.me/{bot_name}?start=ref_{user.id}"
+
     keyboard = [[InlineKeyboardButton(u("🔙 Back to Main Menu"), callback_data="back_main")]]
-    if pays:
-        lines = "\n".join(
-            f"• {p['plan_name']} — ₹{p['amount']} ({p['paid_at'].strftime('%d %b %Y') if p.get('paid_at') else 'N/A'})"
-            for p in pays
-        )
-        msg = f"📋 {b('Your Paid Subscriptions')}\n\n{lines}"
-    else:
-        msg = (
-            f"📋 {b('Your Paid Subscriptions')}\n\n"
-            f"{b('You Don t Have Any Active Subscriptions At The Moment')}\n\n"
-            f"{b('To Subscribe To Premium Channels, Go Back And Select Premium Subscription')} ❤️"
-        )
+    msg = (
+        f"👥 {b('Refer and Earn')}\n\n"
+        f"{b('Share Your Referral Link And Earn ₹1 For Every New Member Who Joins!')}\n\n"
+        f"🔗 {b('Your Referral Link')}:\n"
+        f"<code>{ref_link}</code>\n\n"
+        f"💰 {b('Total Referral Earned')}: ₹{rb}\n\n"
+        f"📌 {b('How It Works')}:\n"
+        f"  1. {b('Share your referral link')}\n"
+        f"  2. {b('New user joins via your link')}\n"
+        f"  3. {b('₹1 is instantly credited to your referral balance')}\n"
+        f"  4. {b('Use referral balance to buy subscriptions!')}\n\n"
+        f"⚡ {b('Tap the link above to copy it')}"
+    )
     await safe_edit(query, context, msg, keyboard)
 
+# ── Support / Developer ────────────────────────────────────────────────────────
 async def support(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
@@ -619,8 +770,7 @@ async def support(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"🆘 {b('Help & Support')}\n\n"
         f"{b('If You Have Any Questions Or Need Assistance With Your Subscription, Please Contact Our Admin')}\n\n"
         f"{b('For Common Questions')}:\n"
-        f"- {b('To Subscribe')}: {b('Select Our Premium Subscription From The Main Menu')}\n"
-        f"- {b('To Check Your Subscriptions')}: {b('Select My Paid Subscriptions From The Main Menu')}\n"
+        f"- {b('To Subscribe')}: {b('Recharge Wallet Then Select Premium Subscription')}\n"
         f"- {b('Payment Issues')}: {b('Contact Our Admin Directly')}\n"
         f"- {b('Access Problems')}: {b('Contact Our Admin With Your Subscription Details')}\n\n"
         f"{b('Our Support Admin')}: @{ADMIN_USERNAME}"
@@ -641,7 +791,11 @@ async def developer(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
     await safe_edit(query, context, msg, keyboard)
 
-# ── /newplan ConversationHandler ──────────────────────────────────────────────
+async def dummy_placeholder(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer(u("Coming soon!"), show_alert=True)
+
+# ── /newplan ConversationHandler ───────────────────────────────────────────────
 NP_NAME, NP_DESC, NP_PRICE, NP_PAYDESC, NP_LINK, NP_SAMPLE = range(6)
 
 async def np_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -821,10 +975,11 @@ async def rmp_cancel_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # ── Callback router ────────────────────────────────────────────────────────────
 async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     data = update.callback_query.data
-    uid  = update.callback_query.from_user.id
 
     if   data == "menu_plans":             await menu_plans(update, context)
-    elif data == "menu_mysubs":            await my_subscriptions(update, context)
+    elif data == "menu_about":             await menu_about(update, context)
+    elif data == "menu_wallet":            await menu_wallet(update, context)
+    elif data == "menu_refer":             await menu_refer(update, context)
     elif data == "menu_support":           await support(update, context)
     elif data == "menu_dev":              await developer(update, context)
     elif data == "back_main":             await start(update, context)
@@ -836,8 +991,10 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif data.startswith("showplan_"):    await show_plan(update, context)
     elif data.startswith("sample_"):      await sample_content(update, context)
     elif data.startswith("buy_"):         await buy_plan(update, context)
-    elif data.startswith("rzp_"):         await pay_razorpay(update, context)
-    elif data.startswith("qr_"):          await pay_qr(update, context)
-    elif data.startswith("crypto_"):      await pay_crypto(update, context)
+    elif data.startswith("wpay_"):        await wallet_pay_plan(update, context)
+    elif data.startswith("wamt_"):        await wallet_amount_selected(update, context)
+    elif data.startswith("wrzp_"):        await wallet_pay_razorpay(update, context)
+    elif data.startswith("wqr_"):         await wallet_pay_qr(update, context)
+    elif data.startswith("wcrypto_"):     await wallet_pay_crypto(update, context)
+    elif data.startswith("wdone_"):       await wallet_done(update, context)
     elif data == "dummy_placeholder":     await dummy_placeholder(update, context)
-    elif data.startswith("paid_"):        await i_have_paid(update, context)

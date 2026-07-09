@@ -33,6 +33,7 @@ plans_col = db["plans"]
 
 # ── In-memory state ───────────────────────────────────────────────────────────
 pending_payments   = {}   # user_id → payment info
+pending_recharges  = {}   # user_id → recharge info
 pending_broadcasts = {}   # admin_id → {chat_id, message_id}
 
 # ── Plans (MongoDB-backed) ────────────────────────────────────────────────────
