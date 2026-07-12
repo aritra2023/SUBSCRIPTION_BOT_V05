@@ -92,7 +92,9 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         ],
     ]
     if update.message:
-        await update.message.reply_text("\u2063", reply_markup=MAIN_KEYBOARD)
+        # Only set the persistent keyboard for new users to avoid the extra bubble
+        if is_new:
+            await update.message.reply_text("\u2063", reply_markup=MAIN_KEYBOARD)
         await update.message.reply_photo(
             photo="https://files.catbox.moe/v80oav.jpg",
             caption=msg,
@@ -100,10 +102,19 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             parse_mode=ParseMode.HTML,
         )
     else:
-        await safe_edit(
-            update.callback_query, context,
-            msg,
-            inline,
+        # Called from a callback (e.g. Back button) — delete old message, send fresh photo
+        query = update.callback_query
+        chat_id = query.message.chat_id
+        try:
+            await query.message.delete()
+        except Exception:
+            pass
+        await context.bot.send_photo(
+            chat_id=chat_id,
+            photo="https://files.catbox.moe/v80oav.jpg",
+            caption=msg,
+            reply_markup=InlineKeyboardMarkup(inline),
+            parse_mode=ParseMode.HTML,
         )
 
 # ── /addbalance user_id amount (admin) ────────────────────────────────────────
