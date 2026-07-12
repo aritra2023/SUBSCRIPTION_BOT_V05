@@ -92,16 +92,12 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         ],
     ]
     if update.message:
+        await update.message.reply_text("\u2063", reply_markup=MAIN_KEYBOARD)
         await update.message.reply_photo(
             photo="https://files.catbox.moe/v80oav.jpg",
             caption=msg,
             reply_markup=InlineKeyboardMarkup(inline),
             parse_mode=ParseMode.HTML,
-        )
-        await context.bot.send_message(
-            chat_id=update.message.chat_id,
-            text="\u2063",
-            reply_markup=MAIN_KEYBOARD,
         )
     else:
         await safe_edit(
