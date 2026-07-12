@@ -23,6 +23,7 @@ from config import (
 from utils import (
     u, b, is_admin, safe_edit, save_user, record_payment,
     get_wallet, credit_wallet, deduct_wallet,
+    needs_keyboard_update, mark_keyboard_sent,
 )
 import logging
 logger = logging.getLogger(__name__)
@@ -92,8 +93,10 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         ],
     ]
     if update.message:
-        # Always resend keyboard so button text stays current after any changes
-        await update.message.reply_text("\u2063", reply_markup=MAIN_KEYBOARD)
+        # Send keyboard only when the user hasn't received the current version yet
+        if needs_keyboard_update(user.id):
+            await update.message.reply_text("\u2063", reply_markup=MAIN_KEYBOARD)
+            mark_keyboard_sent(user.id)
         await update.message.reply_photo(
             photo="https://files.catbox.moe/v80oav.jpg",
             caption=msg,

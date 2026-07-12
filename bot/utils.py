@@ -47,6 +47,16 @@ def save_user(user, referred_by: int = None) -> bool:
     )
     return result.upserted_id is not None
 
+KB_VERSION = 2  # bump this whenever bottom-keyboard button text changes
+
+def needs_keyboard_update(user_id: int) -> bool:
+    """Returns True if the user hasn't received the current keyboard version yet."""
+    doc = users_col.find_one({"user_id": user_id}, {"kb_version": 1})
+    return (doc or {}).get("kb_version", 0) < KB_VERSION
+
+def mark_keyboard_sent(user_id: int):
+    users_col.update_one({"user_id": user_id}, {"$set": {"kb_version": KB_VERSION}})
+
 def get_wallet(user_id: int):
     """Returns (wallet_balance, referral_balance) for a user."""
     doc = users_col.find_one({"user_id": user_id}, {"wallet_balance": 1, "referral_balance": 1})
