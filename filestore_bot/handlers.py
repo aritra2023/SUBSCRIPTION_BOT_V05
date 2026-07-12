@@ -145,7 +145,9 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         share_link = f"https://t.me/{context.bot.username}?start=file_{msg_id}"
         await query.answer()
         await query.message.reply_text(
-            f"🔗 <b>Sharable Link:</b>\n<code>{share_link}</code>",
+            f"🔗 <b>Sharable Link</b>\n\n"
+            f"<b>File ID:</b>\n<code>{msg_id}</code>\n\n"
+            f"<b>Link:</b>\n<code>{share_link}</code>",
             parse_mode=ParseMode.HTML,
         )
 
@@ -173,6 +175,7 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         clear_running_batch(admin_id)
         await query.edit_message_text(
             f"✅ <b>Batch saved!</b>  ({len(msg_ids)} files)\n\n"
+            f"<b>Batch ID:</b>\n<code>{batch_id}</code>\n\n"
             f"<b>Batch Link:</b>\n<code>{batch_link}</code>",
             parse_mode=ParseMode.HTML,
         )
@@ -196,15 +199,16 @@ async def cmd_addbutton(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("🔒 This bot is private.")
         return
 
+    # Format: /addbutton url_ButtonName
     match = re.match(
-        r"/addbutton\s+(https?://\S+)\s+\[(.+?)\]",
+        r"/addbutton\s+(https?://\S+)_(.+)",
         update.message.text or "",
         re.DOTALL,
     )
     if not match:
         await update.message.reply_text(
             "❌ <b>Wrong format.</b>\n\n"
-            "Use: <code>/addbutton https://yourlink.com [Button Name]</code>",
+            "Use: <code>/addbutton https://yourlink.com_Button Name</code>",
             parse_mode=ParseMode.HTML,
         )
         return
