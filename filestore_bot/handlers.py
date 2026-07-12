@@ -139,11 +139,15 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     data     = query.data
     admin_id = query.from_user.id
 
-    # ── 🔗 Get Sharable Link → single file link shown as popup ──
+    # ── 🔗 Get Sharable Link → single file link sent as message ──
     if data.startswith("gsl_"):
         msg_id     = data[4:]
         share_link = f"https://t.me/{context.bot.username}?start=file_{msg_id}"
-        await query.answer(share_link, show_alert=True)
+        await query.answer()
+        await query.message.reply_text(
+            f"🔗 <b>Sharable Link:</b>\n<code>{share_link}</code>",
+            parse_mode=ParseMode.HTML,
+        )
 
     # ── 📦 Save in Batch ──
     elif data.startswith("sib_"):
