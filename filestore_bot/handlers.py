@@ -93,12 +93,7 @@ async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     # ── Normal /start ──
-    await update.message.reply_text(
-        "👋 <b>File Store Bot</b>\n\n"
-        "Send me any file — I'll store it and give you a shareable link.\n\n"
-        "/help — Commands",
-        parse_mode=ParseMode.HTML,
-    )
+    await update.message.reply_text("ʜɪ ! ɪ ᴀᴍ ᴀʟɪᴠᴇ . . . .")
 
 
 # ── File handler (admin only) ─────────────────────────────────────────────────
