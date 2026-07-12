@@ -92,9 +92,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         ],
     ]
     if update.message:
-        # Only set the persistent keyboard for new users to avoid the extra bubble
-        if is_new:
-            await update.message.reply_text("\u2063", reply_markup=MAIN_KEYBOARD)
+        # Always resend keyboard so button text stays current after any changes
+        await update.message.reply_text("\u2063", reply_markup=MAIN_KEYBOARD)
         await update.message.reply_photo(
             photo="https://files.catbox.moe/v80oav.jpg",
             caption=msg,
@@ -1133,13 +1132,30 @@ async def rmp_cancel_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def how_to_buy(update: Update, context: ContextTypes.DEFAULT_TYPE):
     tutorial_link = get_tutorial_link()
     if tutorial_link:
-        keyboard = [[InlineKeyboardButton(u("📖 How To Buy"), url=tutorial_link)]]
-        msg = f"❓ {b('How To Buy')}"
-    else:
-        keyboard = [[InlineKeyboardButton(u("🛍️ Browse Subscriptions"), callback_data="menu_plans")]]
+        keyboard = [
+            [InlineKeyboardButton(u("📖 Watch Tutorial"), url=tutorial_link)],
+            [InlineKeyboardButton(u("🛍️ Browse Subscriptions"), callback_data="menu_plans")],
+        ]
         msg = (
             f"❓ {b('How To Buy')}\n\n"
-            f"{b('Tutorial not set yet.')} {u('Contact')} @{SUPPORT_USERNAME}"
+            f"{b('Follow these simple steps to subscribe:')}\n\n"
+            f"1️⃣ {b('Recharge your wallet')} — {b('add balance using UPI, QR or Crypto')}\n"
+            f"2️⃣ {b('Browse subscriptions')} — {b('pick the plan you want')}\n"
+            f"3️⃣ {b('Pay from wallet')} — {b('one tap and you get the channel link instantly')}\n\n"
+            f"📖 {b('Watch the full tutorial below for a step-by-step guide.')}"
+        )
+    else:
+        keyboard = [
+            [InlineKeyboardButton(u("🛍️ Browse Subscriptions"), callback_data="menu_plans")],
+            [InlineKeyboardButton(u("🎧 Contact Support"), url=f"https://t.me/{SUPPORT_USERNAME}")],
+        ]
+        msg = (
+            f"❓ {b('How To Buy')}\n\n"
+            f"{b('Follow these simple steps to subscribe:')}\n\n"
+            f"1️⃣ {b('Recharge your wallet')} — {b('add balance using UPI, QR or Crypto')}\n"
+            f"2️⃣ {b('Browse subscriptions')} — {b('pick the plan you want')}\n"
+            f"3️⃣ {b('Pay from wallet')} — {b('one tap and you get the channel link instantly')}\n\n"
+            f"💬 {b('Need help? Contact our support.')}"
         )
     if update.callback_query:
         await update.callback_query.answer()
