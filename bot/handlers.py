@@ -31,8 +31,8 @@ logger = logging.getLogger(__name__)
 RECHARGE_AMOUNTS = [25, 50, 100]
 
 # ── Persistent bottom keyboard ─────────────────────────────────────────────────
-BTN_FREE    = "🆓 Free Channel"
-BTN_REFER   = "🎁 Refer and Earn"
+BTN_FREE    = "Free Channel ✅"
+BTN_REFER   = "Refer and Earn 🎁"
 
 REPLY_KB_TEXTS = {BTN_FREE, BTN_REFER}
 
@@ -84,7 +84,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         [InlineKeyboardButton(u("🛍️ Available Subscriptions"), callback_data="menu_plans")],
         [
             InlineKeyboardButton(u("👤 About"),          callback_data="menu_about"),
-            InlineKeyboardButton(u("💰 Wallet"),         callback_data="menu_wallet"),
+            InlineKeyboardButton(u("💳 Wallet"),         callback_data="menu_wallet"),
         ],
         [
             InlineKeyboardButton(u("🎧 Support"),        callback_data="menu_support"),
@@ -432,11 +432,11 @@ async def buy_plan(update: Update, context: ContextTypes.DEFAULT_TYPE):
             [InlineKeyboardButton(u("🔙 Back"), callback_data=f"showplan_{pid}")],
         ]
         msg = (
-            f"💰 {b('Pay From Wallet')}\n\n"
+            f"💳 {b('Pay From Wallet')}\n\n"
             f"{b('Channel')}: {b(plan['channel'])}\n"
             f"{b('Plan')}: {b('Permanent')}\n"
             f"{b('Amount')}: Rs.{price}\n\n"
-            f"{b('Your Wallet')}:\n"
+            f"💳 {b('Your Wallet')}:\n"
             f"  {b('Recharge Balance')}: Rs.{wb}\n"
             f"  {b('Referral Balance')}: Rs.{rb}\n"
             f"  {b('Total')}: Rs.{total}\n\n"
@@ -453,7 +453,7 @@ async def buy_plan(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"❌ {b('Insufficient Wallet Balance')}\n\n"
             f"{b('Channel')}: {b(plan['channel'])}\n"
             f"{b('Amount Required')}: Rs.{price}\n\n"
-            f"{b('Your Wallet')}:\n"
+            f"💳 {b('Your Wallet')}:\n"
             f"  {b('Recharge Balance')}: Rs.{wb}\n"
             f"  {b('Referral Balance')}: Rs.{rb}\n"
             f"  {b('Total')}: Rs.{total}\n\n"
@@ -539,12 +539,11 @@ async def menu_wallet(update: Update, context: ContextTypes.DEFAULT_TYPE):
     keyboard.append([InlineKeyboardButton(u("🔙 Back"), callback_data="back_main")])
 
     msg = (
-        f"💰 {b('Your Wallet')}\n\n"
+        f"💳 {b('Your Wallet')}\n\n"
         f"  {b('Recharge Balance')}: Rs.{wb}\n"
         f"  {b('Referral Balance')}: Rs.{rb}\n"
         f"  {b('Total Balance')}: Rs.{total}\n\n"
-        f"─────────────────────\n"
-        f"🌟 {b('Recharge Wallet')}\n"
+        f"💳 {b('Recharge Wallet')}\n"
         f"{b('Select An Amount To Add To Your Wallet')} 👇"
     )
     await safe_edit(query, context, msg, keyboard)
@@ -593,7 +592,7 @@ async def handle_custom_recharge_input(update: Update, context: ContextTypes.DEF
         [InlineKeyboardButton(u("🔙 Back"), callback_data="menu_wallet")],
     ]
     await update.message.reply_text(
-        f"💰 {b('Wallet Recharge')}\n\n"
+        f"💳 {b('Wallet Recharge')}\n\n"
         f"{b('Amount')}: Rs.{amt}\n\n"
         f"{b('Choose Your Payment Method')} 👇\n"
         f"{b('Once Payment Is Done Your Wallet Will Be Credited Automatically')}",
@@ -619,7 +618,7 @@ async def wallet_amount_selected(update: Update, context: ContextTypes.DEFAULT_T
         [InlineKeyboardButton(u("🔙 Back"), callback_data="menu_wallet")],
     ]
     msg = (
-        f"💰 {b('Wallet Recharge')}\n\n"
+        f"💳 {b('Wallet Recharge')}\n\n"
         f"{b('Amount')}: Rs.{amt}\n\n"
         f"{b('Choose Your Payment Method')} 👇\n"
         f"{b('Once Payment Is Done Your Wallet Will Be Credited Automatically')}"
@@ -928,7 +927,11 @@ async def support(update: Update, context: ContextTypes.DEFAULT_TYPE):
         [InlineKeyboardButton(u("🎧 Contact Admin"),  url=f"https://t.me/{SUPPORT_USERNAME}")],
         [InlineKeyboardButton(u("🔙 Main Menu"), callback_data="back_main")],
     ]
-    msg = f"🎧"
+    msg = (
+        f"🎧 {b('Support')}\n\n"
+        f"{b('Need help? Our support team is here for you.')}\n\n"
+        f"{b('Tap the button below to contact admin directly.')}"
+    )
     await safe_edit(query, context, msg, keyboard)
 
 async def developer(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -1150,11 +1153,15 @@ async def how_to_buy(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def free_channel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     link = get_free_channel_link()
     if link:
-        keyboard = [[InlineKeyboardButton(u("🆓 Join Free Channel"), url=link)]]
-        msg = f"🆓 {b('Free Channel')}"
+        keyboard = [[InlineKeyboardButton(u("✅ Join Free Channel"), url=link)]]
+        msg = (
+            f"✅ {b('Free Channel')}\n\n"
+            f"{b('Join our free channel to get regular updates and free content.')}\n\n"
+            f"{b('Tap the button below to join.')}"
+        )
     else:
         keyboard = []
-        msg = f"🆓 {b('Free channel not set yet.')} {u('Contact')} @{SUPPORT_USERNAME}"
+        msg = f"✅ {b('Free channel not set yet.')} {u('Contact')} @{SUPPORT_USERNAME}"
     if update.callback_query:
         await update.callback_query.answer()
         await safe_edit(update.callback_query, context, msg, keyboard)
