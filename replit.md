@@ -1,40 +1,39 @@
 # Telegram Payment Bot
 
-A Telegram bot for selling premium channel subscriptions via Razorpay (card/UPI) and cryptocurrency (BNB Smart Chain).
+A Telegram bot for selling subscription plans via Razorpay payments, with MongoDB-backed user and payment tracking.
 
 ## Stack
-- **Language:** Python 3.11
-- **Framework:** python-telegram-bot 21.6
-- **Database:** MongoDB (via pymongo)
-- **Payments:** Razorpay + manual crypto (BEP20)
 
-## Project structure
-```
-bot/
-  main.py        — entry point; starts health server + bot polling
-  config.py      — env vars, Razorpay client, MongoDB collections, seed plans
-  handlers.py    — all command & callback handlers
-  utils.py       — helpers (save_user, record_payment, etc.)
-  requirements.txt
-```
+- **Python** (python-telegram-bot 21.6)
+- **Razorpay** — payment gateway (INR)
+- **MongoDB** — stores users, payments, plans, and settings
 
 ## How to run
-The workflow **Telegram Payment Bot** runs `cd bot && python3 main.py`.
 
-A health-check HTTP server starts on `PORT` (default 8000) alongside the bot.
+The workflow **"Telegram Payment Bot"** runs `cd bot && python3 main.py`.
+
+It starts a health-check HTTP server on `PORT` (default 8000) alongside the Telegram polling loop.
 
 ## Required secrets
+
 | Secret | Description |
 |---|---|
 | `TELEGRAM_BOT_TOKEN` | Bot token from @BotFather |
 | `RAZORPAY_KEY_ID` | Razorpay API key ID |
 | `RAZORPAY_KEY_SECRET` | Razorpay API key secret |
-| `MONGODB_URI` | MongoDB connection string |
+| `MONGODB_URI` | MongoDB Atlas connection string |
 
-## Admin config (in config.py)
-- `ADMIN_USERNAME` / `ADMIN_IDS` — Telegram username & user ID with admin access
-- `PREMIUM_CHANNEL_LINK` — invite link given to paying users
-- `CRYPTO_ADDRESS` / `CRYPTO_NETWORK` — BEP20 address for crypto payments
+## Bot entry points
+
+- `bot/main.py` — startup, registers all handlers
+- `bot/config.py` — env vars, MongoDB client, Razorpay client, plan helpers
+- `bot/handlers.py` — all command and callback handlers
+- `bot/utils.py` — utility functions
+
+## Admin commands
+
+`/stats`, `/broadcast`, `/check`, `/addbalance`, `/removeplan`, `/newplan`, `/set_freechannel`, `/remove_freechannel`, `/set_tutorial`, `/remove_tutorial`
+
+Admin user IDs are hardcoded in `bot/config.py` (`ADMIN_IDS`).
 
 ## User preferences
-<!-- Add preferences here as needed -->
