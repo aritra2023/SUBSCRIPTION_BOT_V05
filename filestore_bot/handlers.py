@@ -37,6 +37,10 @@ def _file_keyboard(bot_username: str, msg_id: int) -> InlineKeyboardMarkup:
 # ── /start ────────────────────────────────────────────────────────────────────
 
 async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not is_admin(update.effective_user):
+        await update.message.reply_text("🔒 This bot is private.")
+        return
+
     args = context.args
 
     # Deep-link: /start file_<msg_id>
@@ -107,6 +111,9 @@ async def handle_file(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
+    if not is_admin(query.from_user):
+        await query.answer("🔒 Private bot.", show_alert=True)
+        return
     data  = query.data
 
     if data.startswith("getlink_"):
@@ -170,19 +177,18 @@ async def cmd_removebutton(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # ── /help ─────────────────────────────────────────────────────────────────────
 
 async def cmd_help(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    adm = is_admin(update.effective_user)
+    if not is_admin(update.effective_user):
+        await update.message.reply_text("🔒 This bot is private.")
+        return
     msg = (
         "📖 <b>File Store Bot — Commands</b>\n\n"
         "/start — Open bot\n"
-        "/help  — Show this list\n"
+        "/help  — Show this list\n\n"
+        "🔧 <b>Admin Commands</b>\n\n"
+        "<b>Store a file</b> — Just send any file to the bot\n\n"
+        "/addbutton <code>https://link.com [Button Name]</code>\n"
+        "  → Adds a URL button to every delivered file\n\n"
+        "/removebutton\n"
+        "  → Removes the custom URL button\n"
     )
-    if adm:
-        msg += (
-            "\n🔧 <b>Admin Commands</b>\n\n"
-            "<b>Store a file</b> — Just send any file to the bot\n\n"
-            "/addbutton <code>https://link.com [Button Name]</code>\n"
-            "  → Adds a URL button to every delivered file\n\n"
-            "/removebutton\n"
-            "  → Removes the custom URL button\n"
-        )
     await update.message.reply_text(msg, parse_mode=ParseMode.HTML)
