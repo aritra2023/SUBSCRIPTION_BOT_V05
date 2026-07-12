@@ -22,7 +22,7 @@ from config import (
     ADMIN_USERNAME, ADMIN_IDS, SUPPORT_USERNAME, DEV_USERNAME,
     PREMIUM_CHANNEL_LINK, FREE_CHANNEL_LINK,
     CRYPTO_NETWORK, CRYPTO_ADDRESS,
-    razorpay_client, users_col, pays_col, plans_col,
+    razorpay_client, users_col, pays_col, plans_col, recharges_col,
     pending_payments, pending_recharges, pending_broadcasts,
     get_all_plans, get_plan,
     get_free_channel_link, get_tutorial_link, set_setting, remove_setting,
@@ -201,6 +201,12 @@ async def cmd_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
         {"$group": {"_id": None, "total": {"$sum": "$amount"}}}
     ]))
     revenue = total_revenue[0]["total"] if total_revenue else 0
+
+    total_recharge_agg = list(recharges_col.aggregate([
+        {"$group": {"_id": None, "total": {"$sum": "$amount"}}}
+    ]))
+    total_recharged = total_recharge_agg[0]["total"] if total_recharge_agg else 0
+
     breakdown = list(pays_col.aggregate([
         {"$group": {"_id": "$plan_name", "count": {"$sum": 1}, "amount": {"$sum": "$amount"}}},
         {"$sort": {"count": -1}},
@@ -213,7 +219,8 @@ async def cmd_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"📊 {b('Bot Statistics')}\n\n"
         f"{b('Total Users')}: {total_users}\n"
         f"{b('Total Payments')}: {total_payments}\n"
-        f"{b('Total Revenue')}: Rs.{revenue}\n\n"
+        f"{b('Total Revenue')}: Rs.{revenue}\n"
+        f"{b('Total Wallet Recharges')}: Rs.{total_recharged}\n\n"
         f"🌟 {b('Sales by Plan')}:\n{lines or b('No sales yet')}"
     )
     await update.message.reply_text(msg, parse_mode=ParseMode.HTML)
@@ -511,6 +518,22 @@ async def wallet_pay_plan(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"{b('If You Face Any Issue Contact')}: @{SUPPORT_USERNAME}"
     )
     await safe_edit(query, context, msg, keyboard)
+
+    # ── Admin purchase notification ──
+    user  = query.from_user
+    uname = f"@{user.username}" if user.username else f"#{user.id}"
+    notif = (
+        f"🛒 {b('New Purchase!')}\n\n"
+        f"👤 {b('User')}: {uname}  |  <code>{user.id}</code>\n"
+        f"📦 {b('Plan')}: {plan['channel']}\n"
+        f"💰 {b('Amount')}: Rs.{plan['price']}\n"
+        f"💳 {b('Payment')}: Wallet"
+    )
+    for admin_id in ADMIN_IDS:
+        try:
+            await context.bot.send_message(admin_id, notif, parse_mode=ParseMode.HTML)
+        except Exception:
+            pass
 
 # ── Menu: About ────────────────────────────────────────────────────────────────
 async def menu_about(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -902,6 +925,12 @@ async def wallet_done(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if verified:
         pending_recharges.pop(query.from_user.id, None)
         credit_wallet(query.from_user.id, stored_amt, field="wallet_balance")
+        recharges_col.insert_one({
+            "user_id":   query.from_user.id,
+            "amount":    stored_amt,
+            "type":      stored_type,
+            "timestamp": datetime.now(timezone.utc),
+        })
         wb, rb = get_wallet(query.from_user.id)
         keyboard = [
             [InlineKeyboardButton(u("🌟 Browse Subscriptions"), callback_data="menu_plans")],

@@ -30,10 +30,11 @@ razorpay_client = razorpay.Client(auth=(RAZORPAY_KEY_ID, RAZORPAY_KEY_SECRET))
 # ── MongoDB ───────────────────────────────────────────────────────────────────
 mongo        = MongoClient(MONGODB_URI)
 db           = mongo["paybot"]
-users_col    = db["users"]
-pays_col     = db["payments"]
-plans_col    = db["plans"]
-settings_col = db["settings"]
+users_col     = db["users"]
+pays_col      = db["payments"]
+plans_col     = db["plans"]
+settings_col  = db["settings"]
+recharges_col = db["recharges"]
 
 # ── Settings (MongoDB-backed, survive restarts) ───────────────────────────────
 def get_setting(key: str, default=None):
