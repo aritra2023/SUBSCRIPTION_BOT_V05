@@ -21,26 +21,52 @@ STORAGE_CHANNEL_ID = -1003930510795
 ADMIN_IDS = {7342290214, 6490401448, 5575466305}
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Custom URL button (shown on every delivery)
+# Buttons — global + per-file/per-batch
+# Stored as: { "global": {url, text}, "<id>": {url, text}, ... }
 # ─────────────────────────────────────────────────────────────────────────────
 _BUTTON_FILE = os.path.join(_DIR, "button.json")
 
-def get_custom_button() -> dict | None:
+def _load_buttons() -> dict:
     try:
         with open(_BUTTON_FILE, encoding="utf-8") as f:
-            return json.load(f)
+            data = json.load(f)
+            # migrate old flat format {"url":..,"text":..} → {"global":{..}}
+            if "url" in data:
+                data = {"global": data}
+            return data
     except Exception:
-        return None
+        return {}
 
-def set_custom_button(url: str, text: str) -> None:
+def _save_buttons(data: dict) -> None:
     with open(_BUTTON_FILE, "w", encoding="utf-8") as f:
-        json.dump({"url": url, "text": text}, f)
+        json.dump(data, f)
 
-def remove_custom_button() -> None:
-    try:
-        os.remove(_BUTTON_FILE)
-    except FileNotFoundError:
-        pass
+def get_button(target_id: str | None = None) -> dict | None:
+    """
+    Return button for target_id if set, else the global button, else None.
+    target_id = str(msg_id) for single files, or batch_id string for batches.
+    """
+    data = _load_buttons()
+    if target_id and str(target_id) in data:
+        return data[str(target_id)]
+    return data.get("global")
+
+def set_button(url: str, text: str, target_id: str | None = None) -> None:
+    data = _load_buttons()
+    key  = str(target_id) if target_id else "global"
+    data[key] = {"url": url, "text": text}
+    _save_buttons(data)
+
+def remove_button(target_id: str | None = None) -> None:
+    data = _load_buttons()
+    key  = str(target_id) if target_id else "global"
+    data.pop(key, None)
+    _save_buttons(data)
+
+# ── Legacy aliases (used nowhere new, kept for safety) ────────────────────────
+def get_custom_button():      return get_button()
+def set_custom_button(u, t):  set_button(u, t)
+def remove_custom_button():   remove_button()
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Running batch  →  per-admin list being built right now
@@ -92,7 +118,6 @@ def _save_batches(data: dict) -> None:
         json.dump(data, f)
 
 def save_batch(msg_ids: list[int]) -> str:
-    """Persist a batch and return its short ID."""
     batch_id = uuid.uuid4().hex[:10]
     data = _load_batches()
     data[batch_id] = msg_ids

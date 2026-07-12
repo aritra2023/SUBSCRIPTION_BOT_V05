@@ -7,7 +7,7 @@ from telegram.constants import ParseMode
 
 from config import (
     STORAGE_CHANNEL_ID, ADMIN_IDS,
-    get_custom_button, set_custom_button, remove_custom_button,
+    get_button, set_button, remove_button,
     get_running_batch, add_to_running_batch, clear_running_batch,
     save_batch, get_batch,
 )
@@ -21,20 +21,18 @@ def is_admin(user) -> bool:
     return bool(user and user.id in ADMIN_IDS)
 
 
-def _custom_btn_row() -> list | None:
-    """Returns a keyboard row with the custom button, or None."""
-    btn = get_custom_button()
-    return [InlineKeyboardButton(btn["text"], url=btn["url"])] if btn else None
-
-
-def _delivery_keyboard() -> InlineKeyboardMarkup | None:
-    """Keyboard shown on delivered files — only the custom button, nothing else."""
-    row = _custom_btn_row()
-    return InlineKeyboardMarkup([row]) if row else None
+def _delivery_keyboard(target_id: str | None = None) -> InlineKeyboardMarkup | None:
+    """
+    Returns keyboard with the button for target_id (or global fallback).
+    Returns None if no button is configured.
+    """
+    btn = get_button(target_id)
+    if not btn:
+        return None
+    return InlineKeyboardMarkup([[InlineKeyboardButton(btn["text"], url=btn["url"])]])
 
 
 def _batch_status_keyboard(admin_id: int) -> InlineKeyboardMarkup:
-    """Keyboard shown after adding a file to the running batch."""
     return InlineKeyboardMarkup([
         [
             InlineKeyboardButton("📤 Get Batch Link", callback_data=f"finishbatch_{admin_id}"),
@@ -64,7 +62,7 @@ async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 chat_id=update.effective_chat.id,
                 from_chat_id=STORAGE_CHANNEL_ID,
                 message_id=msg_id,
-                reply_markup=_delivery_keyboard(),
+                reply_markup=_delivery_keyboard(str(msg_id)),
             )
         except Exception as e:
             logger.error("copy_message failed for file_%s: %s", msg_id, e)
@@ -86,7 +84,8 @@ async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     chat_id=update.effective_chat.id,
                     from_chat_id=STORAGE_CHANNEL_ID,
                     message_id=mid,
-                    reply_markup=_delivery_keyboard() if is_last else None,
+                    # show button only on last file; use batch_id for lookup
+                    reply_markup=_delivery_keyboard(batch_id) if is_last else None,
                 )
             except Exception as e:
                 logger.error("copy_message failed for batch file %s: %s", mid, e)
@@ -116,7 +115,7 @@ async def handle_file(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     keyboard = InlineKeyboardMarkup([
         [
-            InlineKeyboardButton("📦 Save in Batch",    callback_data=f"sib_{msg_id}"),
+            InlineKeyboardButton("📦 Save in Batch",     callback_data=f"sib_{msg_id}"),
             InlineKeyboardButton("🔗 Get Sharable Link", callback_data=f"gsl_{msg_id}"),
         ],
     ])
@@ -139,7 +138,7 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     data     = query.data
     admin_id = query.from_user.id
 
-    # ── 🔗 Get Sharable Link → single file link sent as message ──
+    # ── 🔗 Get Sharable Link ──
     if data.startswith("gsl_"):
         msg_id     = data[4:]
         share_link = f"https://t.me/{context.bot.username}?start=file_{msg_id}"
@@ -183,45 +182,69 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # ── 🗑 Clear batch ──
     elif data.startswith("clearbatch_"):
         clear_running_batch(admin_id)
-        await query.edit_message_text(
-            "🗑 <b>Batch cleared.</b>",
-            parse_mode=ParseMode.HTML,
-        )
+        await query.edit_message_text("🗑 <b>Batch cleared.</b>", parse_mode=ParseMode.HTML)
 
     else:
         await query.answer()
 
 
 # ── /addbutton ────────────────────────────────────────────────────────────────
+# Formats:
+#   /addbutton https://link.com_Button Name          → global (all files)
+#   /addbutton <fileid>_https://link.com_Button Name → only that file
+#   /addbutton <batchid>_https://link.com_Button Name → only that batch
 
 async def cmd_addbutton(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_admin(update.effective_user):
         await update.message.reply_text("🔒 This bot is private.")
         return
 
-    # Format: /addbutton url_ButtonName
-    match = re.match(
-        r"/addbutton\s+(https?://\S+)_(.+)",
-        update.message.text or "",
-        re.DOTALL,
+    text = update.message.text or ""
+
+    # Try targeted: /addbutton <id>_https://..._ButtonName
+    targeted = re.match(
+        r"/addbutton\s+(\w+)_(https?://\S+)_(.+)",
+        text, re.DOTALL,
     )
-    if not match:
+    # Try global: /addbutton https://..._ButtonName
+    global_  = re.match(
+        r"/addbutton\s+(https?://\S+)_(.+)",
+        text, re.DOTALL,
+    )
+
+    if targeted:
+        target_id = targeted.group(1).strip()
+        url       = targeted.group(2).strip()
+        btn_text  = targeted.group(3).strip()
+        set_button(url, btn_text, target_id)
         await update.message.reply_text(
-            "❌ <b>Wrong format.</b>\n\n"
-            "Use: <code>/addbutton https://yourlink.com_Button Name</code>",
+            f"✅ <b>Button saved for ID</b> <code>{target_id}</code>\n\n"
+            f"<b>Text:</b> {btn_text}\n"
+            f"<b>URL:</b> {url}\n\n"
+            f"This button will appear only when that file/batch is delivered.",
             parse_mode=ParseMode.HTML,
         )
-        return
-
-    url, btn_text = match.group(1).strip(), match.group(2).strip()
-    set_custom_button(url, btn_text)
-    await update.message.reply_text(
-        f"✅ <b>Button saved!</b>\n\n"
-        f"<b>Text:</b> {btn_text}\n"
-        f"<b>URL:</b> {url}\n\n"
-        f"This button will appear below every delivered file.",
-        parse_mode=ParseMode.HTML,
-    )
+    elif global_:
+        url      = global_.group(1).strip()
+        btn_text = global_.group(2).strip()
+        set_button(url, btn_text)
+        await update.message.reply_text(
+            f"✅ <b>Global button saved</b>\n\n"
+            f"<b>Text:</b> {btn_text}\n"
+            f"<b>URL:</b> {url}\n\n"
+            f"This button will appear on every file that has no specific button set.",
+            parse_mode=ParseMode.HTML,
+        )
+    else:
+        await update.message.reply_text(
+            "❌ <b>Wrong format.</b>\n\n"
+            "<b>Global (all files):</b>\n"
+            "<code>/addbutton https://link.com_Button Name</code>\n\n"
+            "<b>Specific file/batch:</b>\n"
+            "<code>/addbutton fileID_https://link.com_Button Name</code>\n"
+            "<code>/addbutton batchID_https://link.com_Button Name</code>",
+            parse_mode=ParseMode.HTML,
+        )
 
 
 # ── /removebutton ─────────────────────────────────────────────────────────────
@@ -230,8 +253,20 @@ async def cmd_removebutton(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_admin(update.effective_user):
         await update.message.reply_text("🔒 This bot is private.")
         return
-    remove_custom_button()
-    await update.message.reply_text("✅ Custom button removed.")
+
+    text = update.message.text or ""
+    parts = text.split()
+
+    if len(parts) >= 2:
+        target_id = parts[1].strip()
+        remove_button(target_id)
+        await update.message.reply_text(
+            f"✅ Button removed for ID <code>{target_id}</code>.",
+            parse_mode=ParseMode.HTML,
+        )
+    else:
+        remove_button()
+        await update.message.reply_text("✅ Global button removed.")
 
 
 # ── /help ─────────────────────────────────────────────────────────────────────
@@ -246,11 +281,17 @@ async def cmd_help(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "/help  — This list\n\n"
         "🔧 <b>Admin</b>\n\n"
         "<b>Store file</b> — Send any file to the bot\n\n"
-        "<b>Single link</b> — Tap <b>Get Sharable Link</b> → one file, one link\n\n"
-        "<b>Batch link</b> — Tap <b>Save in Batch</b> on each file you want grouped,\n"
-        "then tap <b>Get Batch Link</b> → one link, all files delivered together\n\n"
-        "/addbutton <code>https://link.com [Button Name]</code>\n"
-        "  → URL button shown on every delivery\n\n"
-        "/removebutton — Remove the custom button\n",
+        "<b>Single link</b> — Tap <b>🔗 Get Sharable Link</b>\n"
+        "<b>Batch link</b>  — Tap <b>📦 Save in Batch</b> on each file → <b>📤 Get Batch Link</b>\n\n"
+        "─────────────────\n"
+        "<b>/addbutton</b>\n\n"
+        "Global (all files):\n"
+        "<code>/addbutton https://link.com_Button Name</code>\n\n"
+        "Specific file:\n"
+        "<code>/addbutton 12345_https://link.com_Button Name</code>\n\n"
+        "Specific batch:\n"
+        "<code>/addbutton a1b2c3d4e5_https://link.com_Button Name</code>\n\n"
+        "<b>/removebutton</b> — Remove global button\n"
+        "<b>/removebutton &lt;id&gt;</b> — Remove button for specific file/batch\n",
         parse_mode=ParseMode.HTML,
     )
