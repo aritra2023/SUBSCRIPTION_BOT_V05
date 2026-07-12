@@ -1,11 +1,18 @@
 import asyncio
 import io
 import json
+import random
 import time
 import uuid
 import urllib.parse
 import urllib.request
 from datetime import datetime, timezone
+
+# ── Welcome images (randomly shown on /start) ─────────────────────────────────
+START_IMAGES = [
+    "https://files.catbox.moe/v80oav.jpg",
+    "https://files.catbox.moe/zcmytc.jpg",
+]
 
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup
 from telegram.ext import ContextTypes, ConversationHandler
@@ -98,7 +105,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text("\u2063", reply_markup=MAIN_KEYBOARD)
             mark_keyboard_sent(user.id)
         await update.message.reply_photo(
-            photo="https://files.catbox.moe/v80oav.jpg",
+            photo=random.choice(START_IMAGES),
             caption=msg,
             reply_markup=InlineKeyboardMarkup(inline),
             parse_mode=ParseMode.HTML,
@@ -562,9 +569,54 @@ async def wallet_custom_amount(update: Update, context: ContextTypes.DEFAULT_TYP
         f"{u('Minimum: Rs.1')}",
         keyboard)
 
+async def handle_edit_input(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handles new value input for /editplan."""
+    state = context.user_data.get("awaiting_edit")
+    if not state:
+        return
+    pid   = state["pid"]
+    field = state["field"]
+    plan  = get_plan(pid)
+    if not plan:
+        await update.message.reply_text(b("❌ Plan not found."), parse_mode=ParseMode.HTML)
+        context.user_data.pop("awaiting_edit", None)
+        return
+
+    raw = update.message.text_html if field == "description" else update.message.text.strip()
+
+    if field == "price":
+        try:
+            raw = int(raw)
+            if raw <= 0:
+                raise ValueError
+        except ValueError:
+            await update.message.reply_text(
+                f"❌ {b('Invalid price.')} {u('Send a number only, e.g.')} <code>299</code>",
+                parse_mode=ParseMode.HTML,
+            )
+            return
+
+    plans_col.update_one({"id": pid}, {"$set": {field: raw}})
+    context.user_data.pop("awaiting_edit", None)
+
+    label = {
+        "channel": "Plan Name", "description": "Description", "price": "Price",
+        "pay_description": "Payment Description", "channel_link": "Channel Link",
+        "sample_link": "Sample Link",
+    }.get(field, field)
+
+    await update.message.reply_text(
+        f"✅ {b(label)} {u('updated successfully for')} {b(plan['channel'])}",
+        parse_mode=ParseMode.HTML,
+    )
+
+
 async def handle_custom_recharge_input(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.message and update.message.text in REPLY_KB_TEXTS:
         return  # handled by reply_keyboard handler
+    if context.user_data.get("awaiting_edit"):
+        await handle_edit_input(update, context)
+        return
     if not context.user_data.get("awaiting_recharge"):
         return
     text = update.message.text.strip()
@@ -1242,6 +1294,123 @@ async def cmd_remove_tutorial(update: Update, context: ContextTypes.DEFAULT_TYPE
     remove_setting("tutorial_link")
     await update.message.reply_text(b("✅ Tutorial link removed."), parse_mode=ParseMode.HTML)
 
+# ── /editplan (admin) ─────────────────────────────────────────────────────────
+_EP_FIELDS = {
+    "channel":         "Plan Name",
+    "description":     "Description",
+    "price":           "Price (number)",
+    "pay_description": "Payment Description",
+    "channel_link":    "Channel Link",
+    "sample_link":     "Sample Link",
+}
+
+async def cmd_editplan(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not is_admin(update.effective_user):
+        await update.message.reply_text(b("❌ Admin Only Command."), parse_mode=ParseMode.HTML)
+        return
+    plans = get_all_plans()
+    if not plans:
+        await update.message.reply_text(b("❌ No Plans Found."), parse_mode=ParseMode.HTML)
+        return
+    keyboard = [
+        [InlineKeyboardButton(f"✏️ {p['channel']} — Rs.{p['price']}", callback_data=f"ep_p_{p['id']}")]
+        for p in plans
+    ]
+    keyboard.append([InlineKeyboardButton(u("❌ Cancel"), callback_data="ep_cancel")])
+    await update.message.reply_text(
+        f"✏️ {b('Edit Plan')}\n\n{b('Select The Plan You Want To Edit')} 👇",
+        reply_markup=InlineKeyboardMarkup(keyboard),
+        parse_mode=ParseMode.HTML,
+    )
+
+async def ep_select_plan(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    if not is_admin(query.from_user):
+        return
+    pid  = query.data[len("ep_p_"):]
+    plan = get_plan(pid)
+    if not plan:
+        await query.edit_message_text(b("❌ Plan Not Found."), parse_mode=ParseMode.HTML)
+        return
+    keyboard = [
+        [InlineKeyboardButton(u(label), callback_data=f"ep_f_{pid}_{field}")]
+        for field, label in _EP_FIELDS.items()
+    ]
+    keyboard.append([InlineKeyboardButton(u("❌ Cancel"), callback_data="ep_cancel")])
+    await query.edit_message_text(
+        f"✏️ {b('Edit')} {b(plan['channel'])}\n\n{b('Which field do you want to change?')} 👇",
+        reply_markup=InlineKeyboardMarkup(keyboard),
+        parse_mode=ParseMode.HTML,
+    )
+
+async def ep_select_field(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    if not is_admin(query.from_user):
+        return
+    rest  = query.data[len("ep_f_"):]
+    pid, field = rest.rsplit("_", 1) if "_" in rest else (rest, "")
+    # field names with underscores need special handling
+    for f in _EP_FIELDS:
+        if rest == f"{pid}_{f}" or rest.endswith(f"_{f}"):
+            field = f
+            pid   = rest[: len(rest) - len(f) - 1]
+            break
+    plan = get_plan(pid)
+    if not plan:
+        await query.edit_message_text(b("❌ Plan Not Found."), parse_mode=ParseMode.HTML)
+        return
+    label = _EP_FIELDS.get(field, field)
+    context.user_data["awaiting_edit"] = {"pid": pid, "field": field}
+    current = plan.get(field, "")
+    if field == "description":
+        current_display = u("(formatted text)")
+    else:
+        current_display = str(current)
+    await query.edit_message_text(
+        f"✏️ {b('Edit')} {b(label)}\n\n"
+        f"{b('Current value')}: {current_display}\n\n"
+        f"{b('Send the new value now:')}",
+        parse_mode=ParseMode.HTML,
+    )
+
+async def ep_cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    context.user_data.pop("awaiting_edit", None)
+    await query.edit_message_text(b("❌ Edit cancelled."), parse_mode=ParseMode.HTML)
+
+# ── /help ─────────────────────────────────────────────────────────────────────
+async def cmd_help(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    is_adm = is_admin(update.effective_user)
+    msg = (
+        f"📖 {b('Bot Commands')}\n\n"
+        f"{'─' * 22}\n"
+        f"👤 {b('User Commands')}\n"
+        f"{'─' * 22}\n"
+        f"/start — {u('Open the main menu')}\n"
+        f"/help  — {u('Show this command list')}\n"
+    )
+    if is_adm:
+        msg += (
+            f"\n{'─' * 22}\n"
+            f"🔧 {b('Admin Commands')}\n"
+            f"{'─' * 22}\n"
+            f"/stats            — {u('View total users, revenue & sales breakdown')}\n"
+            f"/addbalance       — {u('Add wallet balance to a user')} <code>/addbalance user_id amount</code>\n"
+            f"/check            — {u('Check payment records for a user')} <code>/check user_id amount</code>\n"
+            f"/broadcast        — {u('Broadcast a message to all users (reply to a message)')}\n"
+            f"/newplan          — {u('Add a new subscription plan (step-by-step)')}\n"
+            f"/editplan         — {u('Edit name, price, description or links of any plan')}\n"
+            f"/removeplan       — {u('Delete a subscription plan')}\n"
+            f"/set_freechannel  — {u('Set the free channel link')} <code>/set_freechannel link</code>\n"
+            f"/remove_freechannel — {u('Remove the free channel link')}\n"
+            f"/set_tutorial     — {u('Set the How to Buy tutorial link')} <code>/set_tutorial link</code>\n"
+            f"/remove_tutorial  — {u('Remove the tutorial link')}\n"
+        )
+    await update.message.reply_text(msg, parse_mode=ParseMode.HTML)
+
 # ── Reply-keyboard button handler ──────────────────────────────────────────────
 async def handle_reply_keyboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text
@@ -1291,6 +1460,9 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif data == "back_main":             await start(update, context)
     elif data == "bc_confirm":            await bc_confirm(update, context)
     elif data == "bc_cancel":             await bc_cancel(update, context)
+    elif data == "ep_cancel":             await ep_cancel(update, context)
+    elif data.startswith("ep_f_"):        await ep_select_field(update, context)
+    elif data.startswith("ep_p_"):        await ep_select_plan(update, context)
     elif data == "rmp_cancel":            await rmp_cancel_cb(update, context)
     elif data.startswith("rmp_confirm_"): await rmp_confirm(update, context)
     elif data.startswith("rmp_"):         await rmp_select(update, context)
