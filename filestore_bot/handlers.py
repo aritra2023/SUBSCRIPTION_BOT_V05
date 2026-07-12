@@ -77,15 +77,13 @@ async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text("❌ Batch not found or expired.")
             return
         total = len(msg_ids)
-        for i, mid in enumerate(msg_ids):
-            is_last = i == total - 1
+        for mid in msg_ids:
             try:
                 await context.bot.copy_message(
                     chat_id=update.effective_chat.id,
                     from_chat_id=STORAGE_CHANNEL_ID,
                     message_id=mid,
-                    # show button only on last file; use batch_id for lookup
-                    reply_markup=_delivery_keyboard(batch_id) if is_last else None,
+                    reply_markup=_delivery_keyboard(batch_id),
                 )
             except Exception as e:
                 logger.error("copy_message failed for batch file %s: %s", mid, e)
