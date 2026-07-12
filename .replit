@@ -20,6 +20,10 @@ author = "agent"
 task = "workflow.run"
 args = "Telegram Payment Bot"
 
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "File Store Bot"
+
 [[workflows.workflow]]
 name = "Telegram Payment Bot"
 author = "agent"
@@ -30,6 +34,17 @@ outputType = "console"
 [[workflows.workflow.tasks]]
 task = "shell.exec"
 args = "cd bot && python3 main.py"
+
+[[workflows.workflow]]
+name = "File Store Bot"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "cd filestore_bot && python3 main.py"
+
+[workflows.workflow.metadata]
+outputType = "console"
 
 [agent]
 stack = "BEST_EFFORT_FALLBACK"
