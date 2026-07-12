@@ -31,16 +31,13 @@ logger = logging.getLogger(__name__)
 RECHARGE_AMOUNTS = [25, 50, 100]
 
 # ── Persistent bottom keyboard ─────────────────────────────────────────────────
-BTN_SUBS    = "🛍️ Available Subscriptions"
-BTN_TOPUP   = "💳 Top Up"
-BTN_HOWTOBUY= "❓ How to Buy"
 BTN_FREE    = "🆓 Free Channel"
-BTN_SUPPORT = "💬 Support"
+BTN_REFER   = "🎁 Refer and Earn"
 
-REPLY_KB_TEXTS = {BTN_SUBS, BTN_TOPUP, BTN_HOWTOBUY, BTN_FREE, BTN_SUPPORT}
+REPLY_KB_TEXTS = {BTN_FREE, BTN_REFER}
 
 MAIN_KEYBOARD = ReplyKeyboardMarkup(
-    [[BTN_SUBS, BTN_TOPUP], [BTN_HOWTOBUY, BTN_FREE], [BTN_SUPPORT]],
+    [[BTN_FREE, BTN_REFER]],
     resize_keyboard=True,
     is_persistent=True,
 )
@@ -90,22 +87,21 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             InlineKeyboardButton(u("💰 Wallet"),         callback_data="menu_wallet"),
         ],
         [
-            InlineKeyboardButton(u("💬 Support"),        callback_data="menu_support"),
-            InlineKeyboardButton(u("🎁 Refer and Earn"), callback_data="menu_refer"),
+            InlineKeyboardButton(u("🎧 Support"),        callback_data="menu_support"),
+            InlineKeyboardButton(u("❓ How to Buy"),     callback_data="menu_howtobuy"),
         ],
     ]
     if update.message:
-        # Ensure the persistent bottom keyboard is always (re)shown on /start,
-        # not just for brand-new users — otherwise it can disappear if the
-        # user's client clears it (e.g. after opening another bot/chat).
-        # NOTE: we deliberately do NOT delete this message — deleting the
-        # message that attached the ReplyKeyboardMarkup causes some Telegram
-        # clients to immediately drop the keyboard again.
-        await update.message.reply_text("\u2063", reply_markup=MAIN_KEYBOARD)
-        await update.message.reply_text(
-            msg,
+        await update.message.reply_photo(
+            photo="https://files.catbox.moe/v80oav.jpg",
+            caption=msg,
             reply_markup=InlineKeyboardMarkup(inline),
             parse_mode=ParseMode.HTML,
+        )
+        await context.bot.send_message(
+            chat_id=update.message.chat_id,
+            text="\u2063",
+            reply_markup=MAIN_KEYBOARD,
         )
     else:
         await safe_edit(
@@ -922,18 +918,10 @@ async def support(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
     keyboard = [
-        [InlineKeyboardButton(u("💬 Contact Admin"),  url=f"https://t.me/{SUPPORT_USERNAME}")],
+        [InlineKeyboardButton(u("🎧 Contact Admin"),  url=f"https://t.me/{SUPPORT_USERNAME}")],
         [InlineKeyboardButton(u("🔙 Main Menu"), callback_data="back_main")],
     ]
-    msg = (
-        f"🌟 {b('Help & Support')}\n\n"
-        f"{b('If You Have Any Questions Or Need Assistance With Your Subscription, Please Contact Our Admin')}\n\n"
-        f"💡 {b('For Common Questions')}:\n"
-        f"  {b('To Subscribe')}: {b('Recharge Wallet Then Select Premium Subscription')}\n"
-        f"  {b('Payment Issues')}: {b('Contact Our Admin Directly')}\n"
-        f"  {b('Access Problems')}: {b('Contact Our Admin With Your Subscription Details')}\n\n"
-        f"{b('Our Support Admin')}: @{SUPPORT_USERNAME}"
-    )
+    msg = f"🎧"
     await safe_edit(query, context, msg, keyboard)
 
 async def developer(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -1226,57 +1214,34 @@ async def handle_reply_keyboard(update: Update, context: ContextTypes.DEFAULT_TY
     text = update.message.text
     save_user(update.effective_user)
 
-    if text == BTN_SUBS:
-        plans = get_all_plans()
-        buttons = [
-            InlineKeyboardButton(u(p["channel"]), callback_data=f"showplan_{p['id']}")
-            for p in plans
-        ]
-        keyboard = [buttons[i:i+2] for i in range(0, len(buttons), 2)]
-        await update.message.reply_text(
-            f"🌟 {b('Available Premium Channels')}\n\n"
-            f"{b('Select a channel to view subscription plans')} 👇",
-            reply_markup=InlineKeyboardMarkup(keyboard),
-            parse_mode=ParseMode.HTML,
-        )
-
-    elif text == BTN_TOPUP:
-        wb, rb = get_wallet(update.effective_user.id)
-        total = wb + rb
-        amt_buttons = [
-            InlineKeyboardButton(f"Rs.{amt}", callback_data=f"wamt_{amt}")
-            for amt in RECHARGE_AMOUNTS
-        ]
-        keyboard = [
-            amt_buttons,
-            [InlineKeyboardButton(u("✏️ Custom Amount"), callback_data="wamt_custom")],
-        ]
-        await update.message.reply_text(
-            f"💰 {b('Your Wallet')}\n\n"
-            f"  💳 {b('Recharge Balance')}: Rs.{wb}\n"
-            f"  🎁 {b('Referral Balance')}: Rs.{rb}\n"
-            f"  💵 {b('Total Balance')}: Rs.{total}\n\n"
-            f"─────────────────────\n"
-            f"🌟 {b('Recharge Wallet')}\n"
-            f"{b('Select an amount to add to your wallet')} 👇",
-            reply_markup=InlineKeyboardMarkup(keyboard),
-            parse_mode=ParseMode.HTML,
-        )
-
-    elif text == BTN_HOWTOBUY:
-        await how_to_buy(update, context)
-
-    elif text == BTN_FREE:
+    if text == BTN_FREE:
         await free_channel(update, context)
 
-    elif text == BTN_SUPPORT:
-        keyboard = [[InlineKeyboardButton(u("💬 Contact Support"), url=f"https://t.me/{SUPPORT_USERNAME}")]]
+    elif text == BTN_REFER:
+        # Simulate a fake callback_query-less refer call via message
+        user     = update.effective_user
+        _, rb    = get_wallet(user.id)
+        bot_name = context.bot.username
+        ref_link = f"https://t.me/{bot_name}?start=ref_{user.id}"
+        share_text = urllib.parse.quote(
+            "Join this premium subscription bot and get exclusive content!\n\nUse my link to join"
+        )
+        share_url = f"https://t.me/share/url?url={urllib.parse.quote(ref_link)}&text={share_text}"
+        keyboard = [
+            [InlineKeyboardButton(u("🔗 Share Referral Link"), url=share_url)],
+        ]
+        msg = (
+            f"🌟 {b('Refer and Earn')}\n\n"
+            f"{b('Share Your Referral Link And Earn Rs.1 For Every New Member Who Joins')}\n\n"
+            f"{b('Total Referral Earned')}: Rs.{rb}\n\n"
+            f"💡 {b('How It Works')}:\n"
+            f"  1. {b('Tap Share Referral Link below')}\n"
+            f"  2. {b('Forward to your friends or groups')}\n"
+            f"  3. {b('Rs.1 is instantly credited when they join')}\n"
+            f"  4. {b('Use referral balance to buy subscriptions')}"
+        )
         await update.message.reply_text(
-            f"💬 {b('Help & Support')}\n\n"
-            f"{b('If you have any questions or need assistance, contact our support admin directly')}\n\n"
-            f"👤 {b('Support')}: @{SUPPORT_USERNAME}",
-            reply_markup=InlineKeyboardMarkup(keyboard),
-            parse_mode=ParseMode.HTML,
+            msg, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML,
         )
 
 # ── Callback router ────────────────────────────────────────────────────────────
@@ -1288,6 +1253,7 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif data == "menu_wallet":            await menu_wallet(update, context)
     elif data == "menu_refer":             await menu_refer(update, context)
     elif data == "menu_support":           await support(update, context)
+    elif data == "menu_howtobuy":          await how_to_buy(update, context)
     elif data == "menu_dev":              await developer(update, context)
     elif data == "back_main":             await start(update, context)
     elif data == "bc_confirm":            await bc_confirm(update, context)
