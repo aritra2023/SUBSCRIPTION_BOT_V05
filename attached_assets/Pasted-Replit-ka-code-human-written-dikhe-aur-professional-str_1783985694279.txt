@@ -1,0 +1,55 @@
+Replit ka code "human-written" dikhe aur professional structure ke sath ho, iske liye aapko AI ko specific constraints (bandishein) deni padengi.
+
+Jab bhi aap kisi AI (ChatGPT, Claude, ya Replit AI) se code likhwayein, to niche diye gaye **"Master Prompt"** ka use karein. Yeh prompt aapke code ko generic structure se hatakar ek professional software engineering level par le aayega.
+
+---
+
+### The Master Prompt
+
+Copy and paste this before your request:
+
+> "Act as a Senior Full-Stack Developer. I need you to write the code for [Yahan apna project batayein, e.g., a landing page for Quickart].
+> **Constraints for Professionalism:**
+> 1. **File Structure:** Organize the project with a professional directory structure (e.g., `/src`, `/components`, `/assets`, `/styles`, `/utils`). Keep configurations (like .env or config.js) separate.
+> 2. **Modular Code:** Write clean, modular, and reusable code. Avoid writing everything in one file (like main.py or index.html). Use imports/exports correctly.
+> 3. **Human-like Coding Style:** Use descriptive variable names (camelCase/PascalCase), proper indentation, and add meaningful comments that explain the 'why' and not just the 'what'. Avoid boilerplate comments that AI usually generates.
+> 4. **No Replit-isms:** Do not include any Replit-specific snippets, intrusive banners, or unnecessary 'powered by' comments. The code should be framework-agnostic.
+> 5. **Error Handling:** Implement robust error handling (try-catch blocks) and input validation.
+> 6. **Performance:** Optimize for speed. If using React/JS, use functional components and hooks effectively.
+> 7. **Output:** Provide the code in a format that shows the file tree first, followed by the contents of each file clearly marked with its path."
+> 
+> 
+
+---
+
+### Tips to keep it "Undetectable"
+
+Agar aap chahte hain ki koi pakad na paye ki yeh AI-generated hai, to ye 3 baatein zaroor add karein:
+
+* **Custom Logic:** AI se hamesha kahein: *"Use a custom helper function for [specific task] instead of using standard library defaults."*
+* **Variable Naming:** AI ko bole ki, *"Use variable names that reflect our project naming conventions (e.g., 'quickart_user_auth' instead of 'userAuth')."*
+* **Edge Cases:** AI aksar simple code likhta hai. Use kahein: *"Handle at least 3 edge cases that a beginner might miss in this specific task."*
+
+### File Structure Ka Standard (Best Practice)
+
+Jab bhi aap code generate karwayein, usse ye structure follow karne ko kahein:
+
+```text
+/project-root
+├── /public            # Static assets
+├── /src
+│   ├── /components    # Reusable UI components
+│   ├── /hooks         # Custom hooks
+│   ├── /services      # API calls/Logic
+│   ├── /styles        # CSS/Tailwind configs
+│   ├── App.js         # Entry point
+│   └── index.js       # Main loader
+├── .env.example       # Example environment variables
+├── package.json       # Dependencies
+└── README.md          # Professional documentation
+
+```
+
+**Pro Tip:** Replit aur Koyeb dono Node.js/Python based standard environments par chalte hain. Agar aap upar wala "Master Prompt" use karenge, to aapko koi extra changes ki zaroorat nahi padegi—yeh code dono jagah perfectly run karega kyunki aapne ise "Standard Modular Architecture" mein likhwaya hai.
+
+Kya aap abhi kisi specific project par kaam kar rahe hain jiske liye mujhe yeh structure create karna chahiye?
