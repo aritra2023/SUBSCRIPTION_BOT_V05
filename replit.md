@@ -1,8 +1,8 @@
-# Telegram Payment Bot + File Store Bot
+# Telegram Payment Bot
 
-Two independent Telegram bots imported from GitHub, run as separate Replit workflows.
+A Telegram bot imported from GitHub, run as a Replit workflow.
 
-## 1. Telegram Payment Bot (`bot/`)
+## Telegram Payment Bot (`bot/`)
 
 Sells subscription plans via Razorpay payments, with MongoDB-backed user and payment tracking.
 
@@ -40,39 +40,12 @@ It starts a health-check HTTP server on `PORT` (default 8000) alongside the Tele
 
 Admin user IDs are hardcoded in `bot/config.py` (`ADMIN_IDS`).
 
-## 2. File Store Bot (`filestore_bot/`)
+## Python environment
 
-Stores any file type sent by an admin in a private Telegram storage channel, then generates a shareable link (single file or batch) that other users can use to retrieve it.
+The bot runs from the `.pythonlibs` virtual environment managed via `pyproject.toml`/`uv.lock` at the project root (dependencies: python-telegram-bot, razorpay, pymongo, dnspython, qrcode, Pillow).
 
-### Stack
+## Deployment
 
-- **Python** (python-telegram-bot 21.6)
-- File/batch metadata persisted to local JSON files (`button.json`, `batches.json`, `running_batches.json`) — no database.
-
-### How to run
-
-The workflow **"File Store Bot"** runs `cd filestore_bot && python3 main.py`.
-
-### Required secrets
-
-| Secret | Description |
-|---|---|
-| `TELEGRAM_DEMO_BOT_TOKEN` | Bot token from @BotFather — must be a different bot than the Payment Bot |
-
-### Bot entry points
-
-- `filestore_bot/main.py` — startup, registers all handlers
-- `filestore_bot/config.py` — env vars, storage channel ID, button/batch persistence helpers
-- `filestore_bot/handlers.py` — all command and callback handlers
-
-### Admin commands
-
-`/addbutton`, `/removebutton`, `/help` (send a file directly to have the bot store it and generate a link)
-
-Admin user IDs are hardcoded in `filestore_bot/config.py` (`ADMIN_IDS`). Storage channel ID is hardcoded in the same file (`STORAGE_CHANNEL_ID`) — the bot must be an admin of that channel.
-
-## Shared Python environment
-
-Both bots run from the same `.pythonlibs` virtual environment managed via `pyproject.toml`/`uv.lock` at the project root (dependencies: python-telegram-bot, razorpay, pymongo, dnspython, qrcode, Pillow).
+`Dockerfile` only copies and runs `bot/` — a Koyeb (or any Docker-based) deploy needs just the Payment Bot's secrets above (`TELEGRAM_BOT_TOKEN`, `RAZORPAY_KEY_ID`, `RAZORPAY_KEY_SECRET`, `MONGODB_URI`). No second bot token is required.
 
 ## User preferences
