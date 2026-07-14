@@ -47,3 +47,6 @@ Thumbs.db
 # Replit
 .cache/
 .local/
+
+# User-attached files (screenshots, uploads) — never keep these in the repo
+attached_assets/
