@@ -24,7 +24,7 @@ from config import (
     CRYPTO_NETWORK, CRYPTO_ADDRESS,
     razorpay_client, users_col, pays_col, plans_col, recharges_col,
     pending_payments, pending_recharges, pending_broadcasts,
-    get_all_plans, get_plan,
+    get_all_plans, get_plan, get_plan_links,
     get_free_channel_link, get_tutorial_link, set_setting, remove_setting,
 )
 from utils import (
@@ -504,10 +504,11 @@ async def wallet_pay_plan(update: Update, context: ContextTypes.DEFAULT_TYPE):
     record_payment(query.from_user.id, plan, ref_id, "wallet")
 
     keyboard = [
-        [InlineKeyboardButton(u("🔑 Join Premium Channel"), url=plan.get("channel_link", PREMIUM_CHANNEL_LINK))],
-        [InlineKeyboardButton(u("💬 Support"),              url=f"https://t.me/{SUPPORT_USERNAME}")],
-        [InlineKeyboardButton(u("🔙 Main Menu"),            callback_data="back_main")],
+        [InlineKeyboardButton(u(f"🔑 {link['label']}"), url=link["url"])]
+        for link in get_plan_links(plan)
     ]
+    keyboard.append([InlineKeyboardButton(u("💬 Support"),   url=f"https://t.me/{SUPPORT_USERNAME}")])
+    keyboard.append([InlineKeyboardButton(u("🔙 Main Menu"), callback_data="back_main")])
     wb, rb = get_wallet(query.from_user.id)
     msg = (
         f"✅ {b('Payment Successful')}\n\n"
@@ -619,13 +620,37 @@ async def handle_edit_input(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
             return
 
+    if field == "channel_links_add" or field.startswith("channel_links_edit_"):
+        new_links = _parse_links(update.message.text)
+        if not new_links:
+            await update.message.reply_text(
+                f"❌ {b('Please send a valid link.')}", parse_mode=ParseMode.HTML,
+            )
+            return
+        links = get_plan_links(plan)
+        if field == "channel_links_add":
+            links = links + new_links
+        else:
+            idx = int(field[len("channel_links_edit_"):])
+            if idx >= len(links):
+                await update.message.reply_text(b("❌ Link not found."), parse_mode=ParseMode.HTML)
+                context.user_data.pop("awaiting_edit", None)
+                return
+            links[idx] = new_links[0]
+        plans_col.update_one({"id": pid}, {"$set": {"channel_links": links}, "$unset": {"channel_link": ""}})
+        context.user_data.pop("awaiting_edit", None)
+        await update.message.reply_text(
+            f"✅ {b('Channel Link(s) updated successfully for')} {b(plan['channel'])}",
+            parse_mode=ParseMode.HTML,
+        )
+        return
+
     plans_col.update_one({"id": pid}, {"$set": {field: raw}})
     context.user_data.pop("awaiting_edit", None)
 
     label = {
         "channel": "Plan Name", "description": "Description", "price": "Price",
-        "pay_description": "Payment Description", "channel_link": "Channel Link",
-        "sample_link": "Sample Link",
+        "pay_description": "Payment Description", "sample_link": "Sample Link",
     }.get(field, field)
 
     await update.message.reply_text(
@@ -1095,17 +1120,44 @@ async def np_got_paydesc(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data["np_paydesc"] = update.message.text.strip()
     await update.message.reply_text(
         f"✅ {b('Payment Description Saved.')}\n\n"
-        f"{b('Step 5/6')} — {b('Send The Premium Channel Link.')}\n"
-        f"{u('This is the invite link users get after successful payment, e.g.')}\n"
-        f"<code>https://t.me/+xxxxxxxxxx</code>",
+        f"{b('Step 5/6')} — {b('Send The Premium Channel Link(s).')}\n"
+        f"{u('Send one link per line. You can add multiple — each becomes its own button after purchase.')}\n"
+        f"{u('Optionally prefix a line with a label using')} <code>Label - URL</code>{u(', e.g.')}\n"
+        f"<code>https://t.me/+xxxxxxxxxx</code>\n"
+        f"<code>Backup Channel - https://t.me/+yyyyyyyyyy</code>",
         parse_mode=ParseMode.HTML,
     )
     return NP_LINK
 
+def _parse_links(raw: str) -> list:
+    """Parse one-link-per-line input, optionally 'Label - URL', into a list of dicts."""
+    links = []
+    n = 0
+    for line in raw.splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        n += 1
+        if " - " in line:
+            label, url = line.split(" - ", 1)
+            label, url = label.strip(), url.strip()
+        else:
+            label, url = f"Join Channel {n}" if n > 1 else "Join Premium Channel", line
+        links.append({"label": label, "url": url})
+    return links
+
 async def np_got_link(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    context.user_data["np_link"] = update.message.text.strip()
+    links = _parse_links(update.message.text)
+    if not links:
+        await update.message.reply_text(
+            f"❌ {b('Please send at least one valid link.')}",
+            parse_mode=ParseMode.HTML,
+        )
+        return NP_LINK
+    context.user_data["np_links"] = links
+    links_preview = "\n".join(f"• {l['label']}: {l['url']}" for l in links)
     await update.message.reply_text(
-        f"✅ {b('Channel Link Saved.')}\n\n"
+        f"✅ {b('Channel Link(s) Saved')}:\n{links_preview}\n\n"
         f"{b('Step 6/6')} — {b('Send The Sample Content Link.')}\n"
         f"{u('Users will be taken to this link when they click View Sample Content, e.g.')}\n"
         f"<code>https://t.me/+xxxxxxxxxx</code>",
@@ -1114,30 +1166,31 @@ async def np_got_link(update: Update, context: ContextTypes.DEFAULT_TYPE):
     return NP_SAMPLE
 
 async def np_got_sample(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    sample_link  = update.message.text.strip()
-    name         = context.user_data["np_name"]
-    desc         = context.user_data["np_desc"]
-    price        = context.user_data["np_price"]
-    pay_desc     = context.user_data["np_paydesc"]
-    channel_link = context.user_data["np_link"]
-    pid          = uuid.uuid4().hex[:8]
+    sample_link   = update.message.text.strip()
+    name          = context.user_data["np_name"]
+    desc          = context.user_data["np_desc"]
+    price         = context.user_data["np_price"]
+    pay_desc      = context.user_data["np_paydesc"]
+    channel_links = context.user_data["np_links"]
+    pid           = uuid.uuid4().hex[:8]
     plans_col.insert_one({
         "id":              pid,
         "channel":         name,
         "description":     desc,
         "price":           price,
         "pay_description": pay_desc,
-        "channel_link":    channel_link,
+        "channel_links":   channel_links,
         "sample_link":     sample_link,
         "created_at":      datetime.now(timezone.utc),
     })
+    links_preview = "\n".join(f"• {l['label']}: {l['url']}" for l in channel_links)
     await update.message.reply_text(
         f"✅ {b('Plan Added Successfully')}\n\n"
         f"{b('ID')}: <code>{pid}</code>\n"
         f"{b('Name')}: {name}\n"
         f"{b('Price')}: Rs.{price}\n"
         f"{b('Payment Description')}: {pay_desc}\n"
-        f"{b('Channel Link')}: {channel_link}\n"
+        f"{b('Channel Link(s)')}:\n{links_preview}\n"
         f"{b('Sample Link')}: {sample_link}",
         parse_mode=ParseMode.HTML,
     )
@@ -1328,8 +1381,8 @@ _EP_FIELDS = {
     "channel":         "Plan Name",
     "description":     "Description",
     "price":           "Price (number)",
+    "channel_links":   "🔗 Channel Links (multiple)",
     "pay_description": "Payment Description",
-    "channel_link":    "Channel Link",
     "sample_link":     "Sample Link",
 }
 
@@ -1390,6 +1443,11 @@ async def ep_select_field(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not plan:
         await query.edit_message_text(b("❌ Plan Not Found."), parse_mode=ParseMode.HTML)
         return
+
+    if field == "channel_links":
+        await _render_links_menu(query, pid, plan)
+        return
+
     label = _EP_FIELDS.get(field, field)
     context.user_data["awaiting_edit"] = {"pid": pid, "field": field}
     current = plan.get(field, "")
@@ -1409,6 +1467,100 @@ async def ep_cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.answer()
     context.user_data.pop("awaiting_edit", None)
     await query.edit_message_text(b("❌ Edit cancelled."), parse_mode=ParseMode.HTML)
+
+# ── Channel Links submenu (multiple links per plan) ────────────────────────────
+async def _render_links_menu(query, pid: str, plan: dict):
+    links = get_plan_links(plan)
+    keyboard = []
+    for i, link in enumerate(links):
+        keyboard.append([
+            InlineKeyboardButton(f"✏️ {link['label']}", callback_data=f"epl_edit_{pid}_{i}"),
+            InlineKeyboardButton("🗑", callback_data=f"epl_del_{pid}_{i}"),
+        ])
+    keyboard.append([InlineKeyboardButton(u("➕ Add New Link"), callback_data=f"epl_add_{pid}")])
+    keyboard.append([InlineKeyboardButton(u("🔙 Back"), callback_data=f"ep_p_{pid}")])
+    links_text = "\n".join(f"{i+1}. {l['label']}: {l['url']}" for i, l in enumerate(links)) or u("(none yet)")
+    await query.edit_message_text(
+        f"🔗 {b('Channel Links')} — {b(plan['channel'])}\n\n{links_text}\n\n"
+        f"{u('Every link here becomes its own button after purchase. Tap a link to edit it, 🗑 to remove it, or add a new one.')}",
+        reply_markup=InlineKeyboardMarkup(keyboard),
+        parse_mode=ParseMode.HTML,
+    )
+
+async def epl_menu_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    if not is_admin(query.from_user):
+        return
+    pid  = query.data[len("epl_menu_"):]
+    plan = get_plan(pid)
+    if not plan:
+        await query.edit_message_text(b("❌ Plan Not Found."), parse_mode=ParseMode.HTML)
+        return
+    await _render_links_menu(query, pid, plan)
+
+async def epl_add_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    if not is_admin(query.from_user):
+        return
+    pid = query.data[len("epl_add_"):]
+    if not get_plan(pid):
+        await query.edit_message_text(b("❌ Plan Not Found."), parse_mode=ParseMode.HTML)
+        return
+    context.user_data["awaiting_edit"] = {"pid": pid, "field": "channel_links_add"}
+    await query.edit_message_text(
+        f"➕ {b('Add A New Channel Link')}\n\n"
+        f"{u('Send the link now. Optionally prefix a label using')} <code>Label - URL</code>{u(', e.g.')}\n"
+        f"<code>Backup Channel - https://t.me/+xxxxxxxxxx</code>",
+        parse_mode=ParseMode.HTML,
+    )
+
+async def epl_edit_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    if not is_admin(query.from_user):
+        return
+    rest      = query.data[len("epl_edit_"):]
+    pid, idx  = rest.rsplit("_", 1)
+    idx       = int(idx)
+    plan      = get_plan(pid)
+    if not plan:
+        await query.edit_message_text(b("❌ Plan Not Found."), parse_mode=ParseMode.HTML)
+        return
+    links = get_plan_links(plan)
+    if idx >= len(links):
+        await query.edit_message_text(b("❌ Link Not Found."), parse_mode=ParseMode.HTML)
+        return
+    context.user_data["awaiting_edit"] = {"pid": pid, "field": f"channel_links_edit_{idx}"}
+    link = links[idx]
+    await query.edit_message_text(
+        f"✏️ {b('Edit Channel Link')}\n\n"
+        f"{b('Current')}: {link['label']} — {link['url']}\n\n"
+        f"{u('Send the new value now. Optionally prefix a label using')} <code>Label - URL</code>:",
+        parse_mode=ParseMode.HTML,
+    )
+
+async def epl_delete(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    if not is_admin(query.from_user):
+        return
+    rest     = query.data[len("epl_del_"):]
+    pid, idx = rest.rsplit("_", 1)
+    idx      = int(idx)
+    plan     = get_plan(pid)
+    if not plan:
+        await query.edit_message_text(b("❌ Plan Not Found."), parse_mode=ParseMode.HTML)
+        return
+    links = get_plan_links(plan)
+    if idx >= len(links):
+        await query.edit_message_text(b("❌ Link Not Found."), parse_mode=ParseMode.HTML)
+        return
+    links.pop(idx)
+    plans_col.update_one({"id": pid}, {"$set": {"channel_links": links}, "$unset": {"channel_link": ""}})
+    plan = get_plan(pid)
+    await _render_links_menu(query, pid, plan)
 
 # ── /help ─────────────────────────────────────────────────────────────────────
 async def cmd_help(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -1492,6 +1644,10 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif data == "ep_cancel":             await ep_cancel(update, context)
     elif data.startswith("ep_f_"):        await ep_select_field(update, context)
     elif data.startswith("ep_p_"):        await ep_select_plan(update, context)
+    elif data.startswith("epl_menu_"):    await epl_menu_cb(update, context)
+    elif data.startswith("epl_add_"):     await epl_add_start(update, context)
+    elif data.startswith("epl_edit_"):    await epl_edit_start(update, context)
+    elif data.startswith("epl_del_"):     await epl_delete(update, context)
     elif data == "rmp_cancel":            await rmp_cancel_cb(update, context)
     elif data.startswith("rmp_confirm_"): await rmp_confirm(update, context)
     elif data.startswith("rmp_"):         await rmp_select(update, context)

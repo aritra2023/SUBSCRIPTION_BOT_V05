@@ -81,3 +81,18 @@ def get_all_plans():
 
 def get_plan(pid):
     return plans_col.find_one({"id": pid}, {"_id": 0})
+
+# ── Channel links (multiple invite links per plan) ────────────────────────────
+def get_plan_links(plan: dict) -> list:
+    """
+    Returns a list of {"label": str, "url": str} dicts for a plan.
+    Supports the new multi-link "channel_links" field, falling back to the
+    legacy single "channel_link" string, then to the global default.
+    """
+    links = plan.get("channel_links")
+    if links:
+        return links
+    legacy = plan.get("channel_link")
+    if legacy:
+        return [{"label": "Join Premium Channel", "url": legacy}]
+    return [{"label": "Join Premium Channel", "url": PREMIUM_CHANNEL_LINK}]
