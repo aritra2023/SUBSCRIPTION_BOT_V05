@@ -799,8 +799,13 @@ async def wallet_pay_qr(update: Update, context: ContextTypes.DEFAULT_TYPE):
     _anim = asyncio.create_task(_animate())
     buf, qr_id, gen_ok = None, "", False
     try:
+        import httpx
         from PIL import Image as PilImage
-        qr_resp = razorpay_client.qrcode.create({
+
+        loop = asyncio.get_event_loop()
+
+        # Run blocking Razorpay SDK call in thread pool so event loop stays free
+        qr_resp = await loop.run_in_executor(None, lambda: razorpay_client.qrcode.create({
             "type":           "upi_qr",
             "name":           "Wallet Recharge",
             "usage":          "single_use",
@@ -808,17 +813,26 @@ async def wallet_pay_qr(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "payment_amount": amt * 100,
             "description":    f"Wallet Recharge: Rs.{amt}",
             "close_by":       int(time.time()) + 900,
-        })
+        }))
         qr_id     = qr_resp.get("id", "")
         image_url = qr_resp.get("image_url", "")
-        with urllib.request.urlopen(image_url) as resp:
-            img_bytes = resp.read()
-        full_img = PilImage.open(io.BytesIO(img_bytes)).convert("RGB")
-        w, h = full_img.size
-        crop = full_img.crop((int(w*0.08), int(h*0.30), int(w*0.92), int(h*0.67)))
-        buf = io.BytesIO()
-        crop.save(buf, format="PNG")
-        buf.seek(0)
+
+        # Download QR image asynchronously (non-blocking)
+        async with httpx.AsyncClient(timeout=10) as client:
+            img_resp = await client.get(image_url)
+            img_bytes = img_resp.content
+
+        # PIL processing is fast/CPU-bound, keep in executor to avoid any blocking
+        def _process_image(raw: bytes) -> io.BytesIO:
+            full_img = PilImage.open(io.BytesIO(raw)).convert("RGB")
+            w, h = full_img.size
+            crop = full_img.crop((int(w*0.08), int(h*0.30), int(w*0.92), int(h*0.67)))
+            out = io.BytesIO()
+            crop.save(out, format="PNG")
+            out.seek(0)
+            return out
+
+        buf = await loop.run_in_executor(None, _process_image, img_bytes)
         gen_ok = True
     except Exception as e:
         logger.error(f"Wallet QR generation failed: {e}")
