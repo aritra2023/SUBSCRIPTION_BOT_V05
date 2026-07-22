@@ -70,7 +70,7 @@ async def _prefetch_qr(user_id: int, amt: int):
             img = _I.open(io.BytesIO(data)).convert("RGB")
             w, h = img.size
             out = io.BytesIO()
-            img.crop((int(w*0.12), int(h*0.33), int(w*0.88), int(h*0.60))).save(out, "PNG")
+            img.crop((int(w*0.17), int(h*0.38), int(w*0.83), int(h*0.65))).save(out, "PNG")
             out.seek(0)
             return out
         buf = await asyncio.get_event_loop().run_in_executor(None, _crop, raw)
@@ -888,7 +888,7 @@ async def wallet_pay_qr(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 img = _I.open(io.BytesIO(data)).convert("RGB")
                 w, h = img.size
                 out = io.BytesIO()
-                img.crop((int(w*0.12), int(h*0.33), int(w*0.88), int(h*0.60))).save(out, "PNG")
+                img.crop((int(w*0.17), int(h*0.38), int(w*0.83), int(h*0.65))).save(out, "PNG")
                 out.seek(0)
                 return out
             buf = await asyncio.get_event_loop().run_in_executor(None, _crop, raw)
