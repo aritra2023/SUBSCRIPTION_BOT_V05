@@ -64,8 +64,16 @@ async def _prefetch_qr(user_id: int, amt: int):
         image_url = qr_resp.get("image_url", "")
         async with httpx.AsyncClient(timeout=15, follow_redirects=True) as client:
             img_resp = await client.get(image_url)
-            buf = io.BytesIO(img_resp.content)
-            buf.seek(0)
+            raw = img_resp.content
+        def _crop(data):
+            from PIL import Image as _I
+            img = _I.open(io.BytesIO(data)).convert("RGB")
+            w, h = img.size
+            out = io.BytesIO()
+            img.crop((int(w*0.12), int(h*0.33), int(w*0.88), int(h*0.60))).save(out, "PNG")
+            out.seek(0)
+            return out
+        buf = await asyncio.get_event_loop().run_in_executor(None, _crop, raw)
         _qr_prefetch_cache[key] = {"qr_id": qr_id, "buf": buf, "ts": time.time()}
         logger.info(f"QR prefetched for user {user_id} amt {amt} → {qr_id}")
     except Exception as e:
@@ -874,8 +882,16 @@ async def wallet_pay_qr(update: Update, context: ContextTypes.DEFAULT_TYPE):
             image_url = qr_resp.get("image_url", "")
             async with httpx.AsyncClient(timeout=15, follow_redirects=True) as client:
                 img_resp = await client.get(image_url)
-                buf = io.BytesIO(img_resp.content)
-                buf.seek(0)
+                raw = img_resp.content
+            def _crop(data):
+                from PIL import Image as _I
+                img = _I.open(io.BytesIO(data)).convert("RGB")
+                w, h = img.size
+                out = io.BytesIO()
+                img.crop((int(w*0.12), int(h*0.33), int(w*0.88), int(h*0.60))).save(out, "PNG")
+                out.seek(0)
+                return out
+            buf = await asyncio.get_event_loop().run_in_executor(None, _crop, raw)
             gen_ok = True
     except Exception as e:
         logger.error(f"Wallet QR generation failed: {e}")
