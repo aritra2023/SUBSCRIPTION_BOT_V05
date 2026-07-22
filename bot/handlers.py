@@ -959,33 +959,59 @@ async def wallet_done(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
 
-    rest  = query.data[len("wdone_"):]
-    parts = rest.split("_", 2)
-    ptype = parts[0]
-    tail  = parts[1] if len(parts) > 1 else ""
-    tail_parts     = tail.rsplit("_", 1)
-    ref_id_from_cb = tail_parts[0] if len(tail_parts) > 1 else tail
-    amt_from_cb    = int(tail_parts[1]) if len(tail_parts) > 1 and tail_parts[1].isdigit() else 0
+    # ── Parse callback data correctly ─────────────────────────────────────────
+    # Format: wdone_{ptype}_{ref_id}_{amt}
+    # QR example:  wdone_qr_qr_AbCdEf_100   (ref_id itself starts with "qr_")
+    # Link example: wdone_link_plink_AbCd_100
+    rest = query.data[len("wdone_"):]
+    rest_rsplit = rest.rsplit("_", 1)                          # split amt from right
+    amt_from_cb = int(rest_rsplit[1]) if len(rest_rsplit) > 1 and rest_rsplit[1].isdigit() else 0
+    ref_and_type = rest_rsplit[0]                              # "qr_qr_AbCdEf" or "link_plink_AbCd"
+    type_split = ref_and_type.split("_", 1)                   # ["qr", "qr_AbCdEf"]
+    ptype          = type_split[0]
+    ref_id_from_cb = type_split[1] if len(type_split) > 1 else ""
 
     pending     = pending_recharges.get(query.from_user.id)
     stored_ref  = pending.get("ref_id", "") if pending else ref_id_from_cb
-    stored_type = pending.get("type", ptype) if pending else ptype
+    stored_type = pending.get("type",   ptype) if pending else ptype
     stored_amt  = pending.get("amount", amt_from_cb) if pending else amt_from_cb
 
-    await safe_edit(query, context, f"⏳ {b('Verifying Payment... (1/5)')}", [])
+    logger.info(f"Payment verify: user={query.from_user.id} type={stored_type} ref={stored_ref} amt={stored_amt}")
+
+    # ── Send a fresh text message for status updates ──────────────────────────
+    # query.message may be a photo (QR), so we can't edit it as text.
+    # Delete it and send a brand-new text message we can edit freely.
+    chat_id = query.message.chat_id
+    try:
+        await query.message.delete()
+    except Exception:
+        pass
+    status_msg = await context.bot.send_message(
+        chat_id=chat_id,
+        text=f"⏳ {b('Verifying Payment...')} (1/10)",
+        parse_mode=ParseMode.HTML,
+    )
 
     verified = False
-    MAX_ATTEMPTS = 5
+    MAX_ATTEMPTS = 10
     for attempt in range(MAX_ATTEMPTS):
         try:
             if stored_type == "qr":
-                payments = razorpay_client.qrcode.fetch_all_payments(stored_ref)
+                loop = asyncio.get_event_loop()
+                payments = await loop.run_in_executor(
+                    None, lambda: razorpay_client.qrcode.fetch_all_payments(stored_ref)
+                )
+                logger.info(f"QR payments response (attempt {attempt+1}): {payments}")
                 for item in (payments.get("items") or []):
-                    if item.get("status") == "captured":
+                    if item.get("status") in ("captured", "authorized"):
                         verified = True
                         break
             else:
-                details = razorpay_client.payment_link.fetch(stored_ref)
+                loop = asyncio.get_event_loop()
+                details = await loop.run_in_executor(
+                    None, lambda: razorpay_client.payment_link.fetch(stored_ref)
+                )
+                logger.info(f"Link status (attempt {attempt+1}): {details.get('status')}")
                 if details.get("status") == "paid":
                     verified = True
         except Exception as e:
@@ -995,14 +1021,14 @@ async def wallet_done(update: Update, context: ContextTypes.DEFAULT_TYPE):
             break
         if attempt < MAX_ATTEMPTS - 1:
             try:
-                await query.message.edit_text(
-                    f"⏳ {b(f'Verifying Payment... ({attempt + 2}/{MAX_ATTEMPTS})')}\n"
+                await status_msg.edit_text(
+                    f"⏳ {b(f'Verifying Payment...')} ({attempt + 2}/{MAX_ATTEMPTS})\n"
                     f"{b('Please wait, checking with payment gateway...')}",
                     parse_mode=ParseMode.HTML,
                 )
             except Exception:
                 pass
-            await asyncio.sleep(4)
+            await asyncio.sleep(3)
 
     if verified:
         pending_recharges.pop(query.from_user.id, None)
@@ -1014,21 +1040,22 @@ async def wallet_done(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "timestamp": datetime.now(timezone.utc),
         })
         wb, rb = get_wallet(query.from_user.id)
-        keyboard = [
+        keyboard = InlineKeyboardMarkup([
             [InlineKeyboardButton(u("🌟 Browse Subscriptions"), callback_data="menu_plans")],
             [InlineKeyboardButton(u("💰 Wallet"),               callback_data="menu_wallet")],
             [InlineKeyboardButton(u("🔙 Main Menu"),            callback_data="back_main")],
-        ]
-        msg = (
+        ])
+        await status_msg.edit_text(
             f"✅ {b('Wallet Recharged Successfully')}\n\n"
             f"🌟 {b('Amount Added')}: Rs.{stored_amt}\n\n"
             f"{b('Your Wallet')}:\n"
             f"  {b('Recharge Balance')}: Rs.{wb}\n"
             f"  {b('Referral Balance')}: Rs.{rb}\n"
             f"  {b('Total Balance')}: Rs.{wb + rb}\n\n"
-            f"{b('You Can Now Buy Subscriptions')} 👇"
+            f"{b('You Can Now Buy Subscriptions')} 👇",
+            reply_markup=keyboard,
+            parse_mode=ParseMode.HTML,
         )
-        await safe_edit(query, context, msg, keyboard)
     else:
         if stored_type == "qr":
             retry_row = [
@@ -1041,18 +1068,19 @@ async def wallet_done(update: Update, context: ContextTypes.DEFAULT_TYPE):
             if pay_url:
                 retry_row.append(InlineKeyboardButton(u("▶️ Payment Page"), url=pay_url))
 
-        keyboard = [
+        keyboard = InlineKeyboardMarkup([
             retry_row,
             [InlineKeyboardButton(u("🎧 Support"), url=f"https://t.me/{SUPPORT_USERNAME}")],
             [InlineKeyboardButton(u("🔙 Back"),    callback_data="menu_wallet")],
-        ]
-        msg = (
+        ])
+        await status_msg.edit_text(
             f"❌ {b('Payment Not Verified Yet')}\n\n"
             f"{b('We Could Not Confirm Your Payment At This Time')}\n"
             f"{b('This Could Be Due To A Delay In The Payment System')}\n\n"
-            f"{b('Please Wait A Moment And Try Again Or Contact Support')} @{SUPPORT_USERNAME}"
+            f"{b('Please Wait A Moment And Try Again Or Contact Support')} @{SUPPORT_USERNAME}",
+            reply_markup=keyboard,
+            parse_mode=ParseMode.HTML,
         )
-        await safe_edit(query, context, msg, keyboard)
 
 # ── Menu: Refer and Earn ───────────────────────────────────────────────────────
 async def menu_refer(update: Update, context: ContextTypes.DEFAULT_TYPE):
