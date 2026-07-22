@@ -117,10 +117,10 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 pass
 
     msg = (
-        f"🌟 {b('Hello! Welcome To The Premium Channel Bot')}\n\n"
+        f"{b('Hello!')} 👋🏻 {b('Welcome To The Premium Channel Bot')}\n\n"
         f"{b('Subscribe To Premium Channels And Get Exclusive Content Instantly')}\n\n"
         f"💳 {b('Recharge Your Wallet And Get Your Premium Link In Seconds')}\n\n"
-        f"👇 {b('Use The Buttons Below To Navigate')}"
+        f"{b('Use The Buttons Below To Navigate')} 👇"
     )
     inline = [
         [InlineKeyboardButton(u("🛍️ Available Subscriptions"), callback_data="menu_plans")],
