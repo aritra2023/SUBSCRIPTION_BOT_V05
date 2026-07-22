@@ -604,7 +604,7 @@ async def menu_wallet(update: Update, context: ContextTypes.DEFAULT_TYPE):
         for amt in RECHARGE_AMOUNTS
     ]
     keyboard = [amt_buttons]
-    keyboard.append([InlineKeyboardButton(u("✍🏻 Custom Amount"), callback_data="wamt_custom")])
+    keyboard.append([InlineKeyboardButton(u("Custom Amount ✍🏻"), callback_data="wamt_custom")])
     keyboard.append([InlineKeyboardButton(u("🔙 Back"), callback_data="back_main")])
 
     msg = (
