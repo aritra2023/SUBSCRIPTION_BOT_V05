@@ -274,6 +274,7 @@ async def cmd_broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
     pending_broadcasts[update.effective_user.id] = {
         "chat_id":    src.chat_id,
         "message_id": src.message_id,
+        "reply_markup": src.reply_markup,  # preserve inline buttons from original message
     }
     keyboard = [[
         InlineKeyboardButton(u("✅ Confirm"), callback_data="bc_confirm"),
@@ -310,6 +311,7 @@ async def bc_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 chat_id=usr["user_id"],
                 from_chat_id=info["chat_id"],
                 message_id=info["message_id"],
+                reply_markup=info.get("reply_markup"),  # keep original buttons
             )
             success += 1
         except Exception as e:
@@ -478,7 +480,7 @@ async def buy_plan(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 callback_data=f"wpay_{pid}"
             )],
             [InlineKeyboardButton(u("💳 Recharge Wallet"), callback_data="menu_wallet")],
-            [InlineKeyboardButton(u("💬 Support"), url=f"https://t.me/{SUPPORT_USERNAME}")],
+            [InlineKeyboardButton(u("🎧 Support"), url=f"https://t.me/{SUPPORT_USERNAME}")],
             [InlineKeyboardButton(u("🔙 Back"), callback_data=f"showplan_{pid}")],
         ]
         msg = (
@@ -496,7 +498,7 @@ async def buy_plan(update: Update, context: ContextTypes.DEFAULT_TYPE):
         need = price - total
         keyboard = [
             [InlineKeyboardButton(u("💳 Recharge Wallet"), callback_data="menu_wallet")],
-            [InlineKeyboardButton(u("💬 Support"), url=f"https://t.me/{SUPPORT_USERNAME}")],
+            [InlineKeyboardButton(u("🎧 Support"), url=f"https://t.me/{SUPPORT_USERNAME}")],
             [InlineKeyboardButton(u("🔙 Back"), callback_data=f"showplan_{pid}")],
         ]
         msg = (
@@ -541,7 +543,7 @@ async def wallet_pay_plan(update: Update, context: ContextTypes.DEFAULT_TYPE):
         [InlineKeyboardButton(u(f"🔑 {link['label']}"), url=link["url"])]
         for link in get_plan_links(plan)
     ]
-    keyboard.append([InlineKeyboardButton(u("💬 Support"),   url=f"https://t.me/{SUPPORT_USERNAME}")])
+    keyboard.append([InlineKeyboardButton(u("🎧 Support"),   url=f"https://t.me/{SUPPORT_USERNAME}")])
     keyboard.append([InlineKeyboardButton(u("🔙 Main Menu"), callback_data="back_main")])
     wb, rb = get_wallet(query.from_user.id)
     msg = (
@@ -602,7 +604,7 @@ async def menu_wallet(update: Update, context: ContextTypes.DEFAULT_TYPE):
         for amt in RECHARGE_AMOUNTS
     ]
     keyboard = [amt_buttons]
-    keyboard.append([InlineKeyboardButton(u("✏️ Custom Amount"), callback_data="wamt_custom")])
+    keyboard.append([InlineKeyboardButton(u("✍🏻 Custom Amount"), callback_data="wamt_custom")])
     keyboard.append([InlineKeyboardButton(u("🔙 Back"), callback_data="back_main")])
 
     msg = (
@@ -724,7 +726,7 @@ async def handle_custom_recharge_input(update: Update, context: ContextTypes.DEF
             InlineKeyboardButton(u("Pay with Crypto"), callback_data=f"wcrypto_{amt}"),
             InlineKeyboardButton(u("Coming Soon"),     callback_data="dummy_placeholder"),
         ],
-        [InlineKeyboardButton(u("💬 Support"), url=f"https://t.me/{SUPPORT_USERNAME}")],
+        [InlineKeyboardButton(u("🎧 Support"), url=f"https://t.me/{SUPPORT_USERNAME}")],
         [InlineKeyboardButton(u("🔙 Back"), callback_data="menu_wallet")],
     ]
     await update.message.reply_text(
@@ -751,7 +753,7 @@ async def wallet_amount_selected(update: Update, context: ContextTypes.DEFAULT_T
             InlineKeyboardButton(u("Pay with Crypto"), callback_data=f"wcrypto_{amt}"),
             InlineKeyboardButton(u("Coming Soon"),     callback_data="dummy_placeholder"),
         ],
-        [InlineKeyboardButton(u("💬 Support"), url=f"https://t.me/{SUPPORT_USERNAME}")],
+        [InlineKeyboardButton(u("🎧 Support"), url=f"https://t.me/{SUPPORT_USERNAME}")],
         [InlineKeyboardButton(u("🔙 Back"), callback_data="menu_wallet")],
     ]
     msg = (
@@ -790,7 +792,7 @@ async def wallet_pay_razorpay(update: Update, context: ContextTypes.DEFAULT_TYPE
             [InlineKeyboardButton(u("▶️ Open Payment Page"), url=short_url)],
             [InlineKeyboardButton(u("✅ I Have Paid"),       callback_data=f"wdone_link_{link_id}_{amt}")],
             [
-                InlineKeyboardButton(u("💬 Support"), url=f"https://t.me/{SUPPORT_USERNAME}"),
+                InlineKeyboardButton(u("🎧 Support"), url=f"https://t.me/{SUPPORT_USERNAME}"),
                 InlineKeyboardButton(u("❌ Cancel"),  callback_data="menu_wallet"),
             ],
         ]
@@ -806,7 +808,7 @@ async def wallet_pay_razorpay(update: Update, context: ContextTypes.DEFAULT_TYPE
         await safe_edit(query, context,
             f"❌ {b('Error creating payment. Please try again or contact support.')}\n@{SUPPORT_USERNAME}",
             [
-                [InlineKeyboardButton(u("💬 Support"), url=f"https://t.me/{SUPPORT_USERNAME}")],
+                [InlineKeyboardButton(u("🎧 Support"), url=f"https://t.me/{SUPPORT_USERNAME}")],
                 [InlineKeyboardButton(u("🔙 Back"), callback_data=f"wamt_{amt}")],
             ])
 
@@ -891,7 +893,7 @@ async def wallet_pay_qr(update: Update, context: ContextTypes.DEFAULT_TYPE):
         keyboard = [
             [InlineKeyboardButton(u("✅ I've Completed Payment"), callback_data=f"wdone_qr_{qr_id}_{amt}")],
             [
-                InlineKeyboardButton(u("💬 Support"), url=f"https://t.me/{SUPPORT_USERNAME}"),
+                InlineKeyboardButton(u("🎧 Support"), url=f"https://t.me/{SUPPORT_USERNAME}"),
                 InlineKeyboardButton(u("❌ Cancel"),  callback_data="menu_wallet"),
             ],
         ]
@@ -938,7 +940,7 @@ async def wallet_pay_crypto(update: Update, context: ContextTypes.DEFAULT_TYPE):
         amount_line = f"{b('Amount')}: Rs.{amt} {b('(Live Rate Unavailable, Contact Admin For USDT Amount)')}"
 
     keyboard = [
-        [InlineKeyboardButton(u("💬 Contact Admin"), url=f"https://t.me/{SUPPORT_USERNAME}")],
+        [InlineKeyboardButton(u("🎧 Contact Admin"), url=f"https://t.me/{SUPPORT_USERNAME}")],
         [InlineKeyboardButton(u("🔙 Back"),           callback_data=f"wamt_{amt}")],
     ]
     msg = (
@@ -1041,7 +1043,7 @@ async def wallet_done(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         keyboard = [
             retry_row,
-            [InlineKeyboardButton(u("💬 Support"), url=f"https://t.me/{SUPPORT_USERNAME}")],
+            [InlineKeyboardButton(u("🎧 Support"), url=f"https://t.me/{SUPPORT_USERNAME}")],
             [InlineKeyboardButton(u("🔙 Back"),    callback_data="menu_wallet")],
         ]
         msg = (
