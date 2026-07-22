@@ -118,7 +118,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     msg = (
         f"{b('Hello!')} 👋🏻 {b('Welcome To The Premium Channel Bot')}\n\n"
-        f"{b('Subscribe To Premium Channels And Get Exclusive Content Instantly')}\n\n"
+        f"{b('Subscribe To Premium Channels And Get Exclusive Content Instantly')} ⚡\n\n"
         f"💳 {b('Recharge Your Wallet And Get Your Premium Link In Seconds')}\n\n"
         f"{b('Use The Buttons Below To Navigate')} 👇"
     )
