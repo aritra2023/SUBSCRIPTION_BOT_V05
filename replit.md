@@ -1,51 +1,57 @@
 # Telegram Payment Bot
 
-A Telegram bot imported from GitHub, run as a Replit workflow.
+A Telegram bot that sells subscription plans via Razorpay (INR) and crypto payments, backed by MongoDB.
 
-## Telegram Payment Bot (`bot/`)
+## Stack
 
-Sells subscription plans via Razorpay payments, with MongoDB-backed user and payment tracking.
+- **Language:** Python 3.11
+- **Bot framework:** python-telegram-bot 21.6
+- **Payments:** Razorpay (card/UPI/netbanking) + manual crypto (BEP20)
+- **Database:** MongoDB (via pymongo)
 
-### Stack
+## Project structure
 
-- **Python** (python-telegram-bot 21.6)
-- **Razorpay** — payment gateway (INR)
-- **MongoDB** — stores users, payments, plans, and settings
+```
+bot/
+  main.py       — entry point, registers all handlers and starts polling
+  config.py     — env vars, MongoDB client, plan seeds, helper functions
+  handlers.py   — all Telegram command and callback handlers
+  utils.py      — shared utilities
+  requirements.txt
+pyproject.toml  — Python dependencies (managed by uv)
+```
 
-### How to run
+## How to run
 
-The workflow **"Telegram Payment Bot"** runs `cd bot && python3 main.py`.
+The **Telegram Payment Bot** workflow runs automatically:
+```
+cd bot && python3 main.py
+```
 
-It starts a health-check HTTP server on `PORT` (default 8000) alongside the Telegram polling loop.
+A lightweight HTTP health-check server also starts on `PORT` (default 8000).
 
-### Required secrets
+## Required secrets
 
-| Secret | Description |
+Set these in Replit Secrets before running:
+
+| Secret | Where to get it |
 |---|---|
-| `TELEGRAM_BOT_TOKEN` | Bot token from @BotFather |
-| `RAZORPAY_KEY_ID` | Razorpay API key ID |
-| `RAZORPAY_KEY_SECRET` | Razorpay API key secret |
-| `MONGODB_URI` | MongoDB Atlas connection string |
+| `TELEGRAM_BOT_TOKEN` | @BotFather on Telegram |
+| `RAZORPAY_KEY_ID` | Razorpay dashboard → API Keys |
+| `RAZORPAY_KEY_SECRET` | Razorpay dashboard → API Keys |
+| `MONGODB_URI` | MongoDB Atlas → Connect → Drivers |
 
-### Bot entry points
+## Admin commands
 
-- `bot/main.py` — startup, registers all handlers
-- `bot/config.py` — env vars, MongoDB client, Razorpay client, plan helpers
-- `bot/handlers.py` — all command and callback handlers
-- `bot/utils.py` — utility functions
-
-### Admin commands
-
-`/stats`, `/broadcast`, `/check`, `/addbalance`, `/removeplan`, `/newplan`, `/set_freechannel`, `/remove_freechannel`, `/set_tutorial`, `/remove_tutorial`
-
-Admin user IDs are hardcoded in `bot/config.py` (`ADMIN_IDS`).
-
-## Python environment
-
-The bot runs from the `.pythonlibs` virtual environment managed via `pyproject.toml`/`uv.lock` at the project root (dependencies: python-telegram-bot, razorpay, pymongo, dnspython, qrcode, Pillow).
-
-## Deployment
-
-`Dockerfile` only copies and runs `bot/` — a Koyeb (or any Docker-based) deploy needs just the Payment Bot's secrets above (`TELEGRAM_BOT_TOKEN`, `RAZORPAY_KEY_ID`, `RAZORPAY_KEY_SECRET`, `MONGODB_URI`). No second bot token is required.
+Admin user IDs are hardcoded in `config.py` (`ADMIN_IDS`). Key commands:
+- `/newplan` — create a subscription plan
+- `/editplan` — edit an existing plan
+- `/removeplan` — delete a plan
+- `/addbalance` — manually credit a user
+- `/stats` — show bot statistics
+- `/broadcast` — send a message to all users
+- `/check` — look up a user
+- `/set_freechannel` / `/remove_freechannel` — manage the free channel link
+- `/set_tutorial` / `/remove_tutorial` — manage tutorial link
 
 ## User preferences
