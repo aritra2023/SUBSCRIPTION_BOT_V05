@@ -8,6 +8,8 @@ import urllib.parse
 import urllib.request
 from datetime import datetime, timezone
 
+FAMPAY_SCANNER_IMAGE = "https://files.catbox.moe/p8uccv.jpeg"
+
 # ── Welcome images (randomly shown on /start) ─────────────────────────────────
 START_IMAGES = [
     "https://files.catbox.moe/v80oav.jpg",
@@ -734,7 +736,7 @@ async def handle_custom_recharge_input(update: Update, context: ContextTypes.DEF
         ],
         [
             InlineKeyboardButton(u("Pay with Crypto"), callback_data=f"wcrypto_{amt}"),
-            InlineKeyboardButton(u("Coming Soon"),     callback_data="dummy_placeholder"),
+            InlineKeyboardButton(u("FamPay"),          callback_data=f"wfampay_{amt}"),
         ],
         [InlineKeyboardButton(u("🎧 Support"), url=f"https://t.me/{SUPPORT_USERNAME}")],
         [InlineKeyboardButton(u("🔙 Back"), callback_data="menu_wallet")],
@@ -761,7 +763,7 @@ async def wallet_amount_selected(update: Update, context: ContextTypes.DEFAULT_T
         ],
         [
             InlineKeyboardButton(u("Pay with Crypto"), callback_data=f"wcrypto_{amt}"),
-            InlineKeyboardButton(u("Coming Soon"),     callback_data="dummy_placeholder"),
+            InlineKeyboardButton(u("FamPay"),          callback_data=f"wfampay_{amt}"),
         ],
         [InlineKeyboardButton(u("🎧 Support"), url=f"https://t.me/{SUPPORT_USERNAME}")],
         [InlineKeyboardButton(u("🔙 Back"), callback_data="menu_wallet")],
@@ -972,133 +974,70 @@ async def wallet_pay_crypto(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
     await safe_edit(query, context, msg, keyboard)
 
-# ── Wallet recharge verification ───────────────────────────────────────────────
+# ── Wallet recharge verification (manual — admin credits wallet) ───────────────
 async def wallet_done(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
 
-    # ── Parse callback data correctly ─────────────────────────────────────────
-    # Format: wdone_{ptype}_{ref_id}_{amt}
-    # QR example:  wdone_qr_qr_AbCdEf_100   (ref_id itself starts with "qr_")
-    # Link example: wdone_link_plink_AbCd_100
+    # ── Parse callback data ────────────────────────────────────────────────────
     rest = query.data[len("wdone_"):]
-    rest_rsplit = rest.rsplit("_", 1)                          # split amt from right
-    amt_from_cb = int(rest_rsplit[1]) if len(rest_rsplit) > 1 and rest_rsplit[1].isdigit() else 0
-    ref_and_type = rest_rsplit[0]                              # "qr_qr_AbCdEf" or "link_plink_AbCd"
-    type_split = ref_and_type.split("_", 1)                   # ["qr", "qr_AbCdEf"]
-    ptype          = type_split[0]
-    ref_id_from_cb = type_split[1] if len(type_split) > 1 else ""
+    rest_rsplit = rest.rsplit("_", 1)
+    amt_from_cb  = int(rest_rsplit[1]) if len(rest_rsplit) > 1 and rest_rsplit[1].isdigit() else 0
+    ref_and_type = rest_rsplit[0]
+    type_split   = ref_and_type.split("_", 1)
+    ptype        = type_split[0]
+    ref_id       = type_split[1] if len(type_split) > 1 else ""
 
-    pending     = pending_recharges.get(query.from_user.id)
-    stored_ref  = pending.get("ref_id", "") if pending else ref_id_from_cb
-    stored_type = pending.get("type",   ptype) if pending else ptype
-    stored_amt  = pending.get("amount", amt_from_cb) if pending else amt_from_cb
+    pending    = pending_recharges.get(query.from_user.id)
+    stored_amt = pending.get("amount", amt_from_cb) if pending else amt_from_cb
+    stored_ref = pending.get("ref_id", ref_id)      if pending else ref_id
+    stored_type = pending.get("type",  ptype)       if pending else ptype
 
-    logger.info(f"Payment verify: user={query.from_user.id} type={stored_type} ref={stored_ref} amt={stored_amt}")
+    user  = query.from_user
+    uname = f"@{user.username}" if user.username else f"#{user.id}"
 
-    # ── Send a fresh text message for status updates ──────────────────────────
-    # query.message may be a photo (QR), so we can't edit it as text.
-    # Delete it and send a brand-new text message we can edit freely.
+    logger.info(f"Payment claimed: user={user.id} type={stored_type} ref={stored_ref} amt={stored_amt}")
+
+    # ── Notify all admins ─────────────────────────────────────────────────────
+    notif = (
+        f"💳 {b('Payment Claimed — Verify & Credit')}\n\n"
+        f"👤 {b('User')}: {uname}  |  <code>{user.id}</code>\n"
+        f"💰 {b('Amount')}: {rs(stored_amt)}\n"
+        f"🔑 {b('Method')}: {stored_type}\n"
+        f"🔗 {b('Ref')}: <code>{stored_ref}</code>\n\n"
+        f"{b('To credit wallet use')}:\n"
+        f"<code>/addbalance {user.id} {stored_amt}</code>"
+    )
+    for admin_id in ADMIN_IDS:
+        try:
+            await context.bot.send_message(admin_id, notif, parse_mode=ParseMode.HTML)
+        except Exception:
+            pass
+
+    # ── Show scanner image + contact admin to user ────────────────────────────
     chat_id = query.message.chat_id
     try:
         await query.message.delete()
     except Exception:
         pass
-    status_msg = await context.bot.send_message(
+
+    keyboard = InlineKeyboardMarkup([
+        [InlineKeyboardButton(u("🎧 Contact Admin For Verification"), url=f"https://t.me/{ADMIN_USERNAME}")],
+        [InlineKeyboardButton(u("🔙 Main Menu"), callback_data="back_main")],
+    ])
+    caption = (
+        f"✅ {b('Payment Submitted!')}\n\n"
+        f"{b('Amount')}: {rs(stored_amt)}\n\n"
+        f"{b('Please Contact Admin And Share Your Payment Screenshot')}\n\n"
+        f"⏳ {b('Your Wallet Will Be Credited After Admin Verification')}"
+    )
+    await context.bot.send_photo(
         chat_id=chat_id,
-        text=f"⏳ {b('Verifying Payment...')} (1/10)",
+        photo=FAMPAY_SCANNER_IMAGE,
+        caption=caption,
+        reply_markup=keyboard,
         parse_mode=ParseMode.HTML,
     )
-
-    verified = False
-    MAX_ATTEMPTS = 10
-    for attempt in range(MAX_ATTEMPTS):
-        try:
-            if stored_type == "qr":
-                loop = asyncio.get_event_loop()
-                payments = await loop.run_in_executor(
-                    None, lambda: razorpay_client.qrcode.fetch_all_payments(stored_ref)
-                )
-                logger.info(f"QR payments response (attempt {attempt+1}): {payments}")
-                for item in (payments.get("items") or []):
-                    if item.get("status") in ("captured", "authorized"):
-                        verified = True
-                        break
-            else:
-                loop = asyncio.get_event_loop()
-                details = await loop.run_in_executor(
-                    None, lambda: razorpay_client.payment_link.fetch(stored_ref)
-                )
-                logger.info(f"Link status (attempt {attempt+1}): {details.get('status')}")
-                if details.get("status") == "paid":
-                    verified = True
-        except Exception as e:
-            logger.warning(f"Wallet payment check attempt {attempt + 1}: {e}")
-
-        if verified:
-            break
-        if attempt < MAX_ATTEMPTS - 1:
-            try:
-                await status_msg.edit_text(
-                    f"⏳ {b(f'Verifying Payment...')} ({attempt + 2}/{MAX_ATTEMPTS})\n"
-                    f"{b('Please wait, checking with payment gateway...')}",
-                    parse_mode=ParseMode.HTML,
-                )
-            except Exception:
-                pass
-            await asyncio.sleep(3)
-
-    if verified:
-        pending_recharges.pop(query.from_user.id, None)
-        credit_wallet(query.from_user.id, stored_amt, field="wallet_balance")
-        recharges_col.insert_one({
-            "user_id":   query.from_user.id,
-            "amount":    stored_amt,
-            "type":      stored_type,
-            "timestamp": datetime.now(timezone.utc),
-        })
-        wb, rb = get_wallet(query.from_user.id)
-        keyboard = InlineKeyboardMarkup([
-            [InlineKeyboardButton(u("🛍️ Browse Subscriptions"), callback_data="menu_plans")],
-            [InlineKeyboardButton(u("💰 Wallet"),               callback_data="menu_wallet")],
-            [InlineKeyboardButton(u("🔙 Main Menu"),            callback_data="back_main")],
-        ])
-        await status_msg.edit_text(
-            f"✅ {b('Wallet Recharged Successfully')}\n\n"
-            f"🛍️ {b('Amount Added')}: {rs(stored_amt)}\n\n"
-            f"{b('Your Wallet')}:\n"
-            f"  {b('Recharge Balance')}: {rs(wb)}\n"
-            f"  {b('Referral Balance')}: {rs(rb)}\n"
-            f"  {b('Total Balance')}: {rs(wb + rb)}\n\n"
-            f"{b('You Can Now Buy Subscriptions')} 👇",
-            reply_markup=keyboard,
-            parse_mode=ParseMode.HTML,
-        )
-    else:
-        if stored_type == "qr":
-            retry_row = [
-                InlineKeyboardButton(u("🔄 Try Again"),     callback_data=query.data),
-                InlineKeyboardButton(u("🔄 Regenerate QR"), callback_data=f"wqr_{stored_amt}"),
-            ]
-        else:
-            pay_url = pending.get("short_url", "") if pending else ""
-            retry_row = [InlineKeyboardButton(u("🔄 Try Again"), callback_data=query.data)]
-            if pay_url:
-                retry_row.append(InlineKeyboardButton(u("▶️ Payment Page"), url=pay_url))
-
-        keyboard = InlineKeyboardMarkup([
-            retry_row,
-            [InlineKeyboardButton(u("🎧 Support"), url=f"https://t.me/{SUPPORT_USERNAME}")],
-            [InlineKeyboardButton(u("🔙 Back"),    callback_data="menu_wallet")],
-        ])
-        await status_msg.edit_text(
-            f"❌ {b('Payment Not Verified Yet')}\n\n"
-            f"{b('We Could Not Confirm Your Payment At This Time')}\n"
-            f"{b('This Could Be Due To A Delay In The Payment System')}\n\n"
-            f"{b('Please Wait A Moment And Try Again Or Contact Support')} @{SUPPORT_USERNAME}",
-            reply_markup=keyboard,
-            parse_mode=ParseMode.HTML,
-        )
 
 # ── Menu: Refer and Earn ───────────────────────────────────────────────────────
 async def menu_refer(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -1158,6 +1097,34 @@ async def developer(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"{b('For Bot Related Queries Or Custom Bot Development Contact The Developer')}"
     )
     await safe_edit(query, context, msg, keyboard)
+
+async def wallet_pay_fampay(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    amt = int(query.data[len("wfampay_"):])
+    keyboard = [
+        [InlineKeyboardButton(u("✅ I Have Paid"), callback_data=f"wdone_fampay_fampay_{amt}")],
+        [InlineKeyboardButton(u("🎧 Contact Admin"), url=f"https://t.me/{SUPPORT_USERNAME}")],
+        [InlineKeyboardButton(u("🔙 Back"), callback_data=f"wamt_{amt}")],
+    ]
+    caption = (
+        f"💳 {b('FamPay Payment')}\n\n"
+        f"{b('Amount')}: {rs(amt)}\n\n"
+        f"{b('Scan The QR Code Above To Pay Via FamPay')}\n"
+        f"{b('Once Paid, Click I Have Paid Button')}"
+    )
+    chat_id = query.message.chat_id
+    try:
+        await query.message.delete()
+    except Exception:
+        pass
+    await context.bot.send_photo(
+        chat_id=chat_id,
+        photo=FAMPAY_SCANNER_IMAGE,
+        caption=caption,
+        reply_markup=InlineKeyboardMarkup(keyboard),
+        parse_mode=ParseMode.HTML,
+    )
 
 async def dummy_placeholder(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
@@ -1763,5 +1730,6 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif data.startswith("wrzp_"):        await wallet_pay_razorpay(update, context)
     elif data.startswith("wqr_"):         await wallet_pay_qr(update, context)
     elif data.startswith("wcrypto_"):     await wallet_pay_crypto(update, context)
+    elif data.startswith("wfampay_"):     await wallet_pay_fampay(update, context)
     elif data.startswith("wdone_"):       await wallet_done(update, context)
     elif data == "dummy_placeholder":     await dummy_placeholder(update, context)
