@@ -10,8 +10,8 @@ from datetime import datetime, timezone
 
 # ── Welcome images (randomly shown on /start) ─────────────────────────────────
 START_IMAGES = [
-    "https://files.catbox.moe/v80oav.jpg",
-    "https://files.catbox.moe/tf6osf.jpg",
+    "https://files.catbox.moe/i4dclo.jpg",
+    "https://files.catbox.moe/wpujf4.jpg",
 ]
 
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup
