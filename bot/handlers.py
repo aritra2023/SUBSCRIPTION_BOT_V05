@@ -1021,19 +1021,19 @@ async def wallet_done(update: Update, context: ContextTypes.DEFAULT_TYPE):
             pass
 
         keyboard = InlineKeyboardMarkup([
+            [InlineKeyboardButton(u("🔄 Regenerate FamPay QR"), callback_data=f"wfampay_{stored_amt}")],
             [InlineKeyboardButton(u("🎧 Contact Admin For Verification"), url=f"https://t.me/{ADMIN_USERNAME}")],
             [InlineKeyboardButton(u("🔙 Main Menu"), callback_data="back_main")],
         ])
-        caption = (
+        msg = (
             f"✅ {b('Payment Submitted!')}\n\n"
             f"{b('Amount')}: {rs(stored_amt)}\n\n"
             f"{b('Please Contact Admin And Share Your FamPay Screenshot')}\n\n"
             f"⏳ {b('Your Wallet Will Be Credited After Admin Verification')}"
         )
-        await context.bot.send_photo(
+        await context.bot.send_message(
             chat_id=chat_id,
-            photo=FAMPAY_SCANNER_IMAGE,
-            caption=caption,
+            text=msg,
             reply_markup=keyboard,
             parse_mode=ParseMode.HTML,
         )
