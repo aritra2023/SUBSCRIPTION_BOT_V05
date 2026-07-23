@@ -7,17 +7,28 @@ from config import users_col, pays_col, ADMIN_IDS
 logger = logging.getLogger(__name__)
 
 # ── Font helpers ───────────────────────────────────────────────────────────────
+_DIGITS = {'0':'𝟬','1':'𝟭','2':'𝟮','3':'𝟯','4':'𝟰','5':'𝟱','6':'𝟲','7':'𝟳','8':'𝟴','9':'𝟵'}
+
+def n(text):
+    """Convert digit characters to bold-italic Unicode digits."""
+    return ''.join(_DIGITS.get(c, c) for c in str(text))
+
 def u(text):
     SC = {
         'a':'ᴀ','b':'ʙ','c':'ᴄ','d':'ᴅ','e':'ᴇ','f':'ғ','g':'ɢ','h':'ʜ',
         'i':'ɪ','j':'ᴊ','k':'ᴋ','l':'ʟ','m':'ᴍ','n':'ɴ','o':'ᴏ','p':'ᴘ',
         'q':'Q','r':'ʀ','s':'s','t':'ᴛ','u':'ᴜ','v':'ᴠ','w':'ᴡ','x':'x',
         'y':'ʏ','z':'ᴢ',
+        **_DIGITS,
     }
     return ''.join(SC.get(c, c) for c in text.lower())
 
 def b(text):
     return f"<b>{u(text)}</b>"
+
+def rs(amt):
+    """Format a rupee amount with styled Rs. prefix and bold-italic digits."""
+    return u(f"Rs.{amt}")
 
 # ── Auth ───────────────────────────────────────────────────────────────────────
 def is_admin(user) -> bool:

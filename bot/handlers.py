@@ -28,7 +28,7 @@ from config import (
     get_free_channel_link, get_tutorial_link, set_setting, remove_setting,
 )
 from utils import (
-    u, b, is_admin, safe_edit, save_user, record_payment,
+    u, b, n, rs, is_admin, safe_edit, save_user, record_payment,
     get_wallet, credit_wallet, deduct_wallet,
     needs_keyboard_update, mark_keyboard_sent,
 )
@@ -211,10 +211,10 @@ async def cmd_addbalance(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"✅ {b('Balance Added Successfully')}\n\n"
         f"👤 {b('User')}: {name} {un}\n"
         f"🆔 {b('ID')}: <code>{target_uid}</code>\n"
-        f"💰 {b('Added')}: Rs.{amount}\n\n"
-        f"💳 {b('New Wallet Balance')}: Rs.{wb}\n"
-        f"🎁 {b('Referral Balance')}: Rs.{rb}\n"
-        f"💵 {b('Total')}: Rs.{wb + rb}",
+        f"💰 {b('Added')}: {rs(amount)}\n\n"
+        f"💳 {b('New Wallet Balance')}: {rs(wb)}\n"
+        f"🎁 {b('Referral Balance')}: {rs(rb)}\n"
+        f"💵 {b('Total')}: {rs(wb + rb)}",
         parse_mode=ParseMode.HTML,
     )
 
@@ -224,9 +224,9 @@ async def cmd_addbalance(update: Update, context: ContextTypes.DEFAULT_TYPE):
             chat_id=target_uid,
             text=f"✅ {b('Wallet Credited')}\n\n"
                  f"💰 {b('Rs.'+ str(amount) + ' has been added to your wallet by admin.')}\n\n"
-                 f"💳 {b('Recharge Balance')}: Rs.{wb}\n"
-                 f"🎁 {b('Referral Balance')}: Rs.{rb}\n"
-                 f"💵 {b('Total Balance')}: Rs.{wb + rb}",
+                 f"💳 {b('Recharge Balance')}: {rs(wb)}\n"
+                 f"🎁 {b('Referral Balance')}: {rs(rb)}\n"
+                 f"💵 {b('Total Balance')}: {rs(wb + rb)}",
             parse_mode=ParseMode.HTML,
         )
     except Exception:
@@ -254,15 +254,15 @@ async def cmd_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
         {"$sort": {"count": -1}},
     ]))
     lines = "\n".join(
-        f"  {b(r['_id'])}: {r['count']} {u('sales')} (Rs.{r['amount']})"
+        f"  {b(r['_id'])}: {n(r['count'])} {u('sales')} ({rs(r['amount'])})"
         for r in breakdown
     )
     msg = (
         f"📊 {b('Bot Statistics')}\n\n"
         f"{b('Total Users')}: {total_users}\n"
         f"{b('Total Payments')}: {total_payments}\n"
-        f"{b('Total Revenue')}: Rs.{revenue}\n"
-        f"{b('Total Wallet Recharges')}: Rs.{total_recharged}\n\n"
+        f"{b('Total Revenue')}: {rs(revenue)}\n"
+        f"{b('Total Wallet Recharges')}: {rs(total_recharged)}\n\n"
         f"🌟 {b('Sales by Plan')}:\n{lines or b('No sales yet')}"
     )
     await update.message.reply_text(msg, parse_mode=ParseMode.HTML)
@@ -393,9 +393,9 @@ async def cmd_check(update: Update, context: ContextTypes.DEFAULT_TYPE):
         un = user_doc.get("username")
         if un:
             lines.append(f"{b('Username')}: @{un}")
-        lines.append(f"{b('Wallet Balance')}: Rs.{user_doc.get('wallet_balance', 0)}")
-        lines.append(f"{b('Referral Balance')}: Rs.{user_doc.get('referral_balance', 0)}")
-    lines.append(f"{b('Amount Queried')}: Rs.{amount_inp}\n")
+        lines.append(f"{b('Wallet Balance')}: {rs(user_doc.get('wallet_balance', 0))}")
+        lines.append(f"{b('Referral Balance')}: {rs(user_doc.get('referral_balance', 0))}")
+    lines.append(f"{b('Amount Queried')}: {rs(amount_inp)}\n")
     if mongo_pays:
         lines.append(f"✅ {b('MongoDB Records')}: {len(mongo_pays)} {u('payment(s) found')}")
         for p in mongo_pays:
@@ -407,7 +407,7 @@ async def cmd_check(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if rzp_found:
         lines.append(f"✅ {b('Razorpay Records')}: {len(rzp_found)} {u('link(s) found')}")
         for r in rzp_found:
-            lines.append(f"  {r['id']} | {u('Status')}: {r['status']} | Rs.{r['amount']}")
+            lines.append(f"  {r['id']} | {u('Status')}: {r['status']} | {rs(r['amount'])}")
     else:
         lines.append(f"❌ {b('Razorpay')}: {u('No matching payment links found')}")
     await update.message.reply_text("\n".join(lines), parse_mode=ParseMode.HTML)
@@ -440,7 +440,7 @@ async def show_plan(update: Update, context: ContextTypes.DEFAULT_TYPE):
             else InlineKeyboardButton(u("👁️ View Sample Content"), callback_data=f"sample_{pid}"),
             InlineKeyboardButton(u("Payment Proof"), url=PREMIUM_CHANNEL_LINK),
         ],
-        [InlineKeyboardButton(f"Rs.{plan['price']} - " + u("Permanent"), callback_data=f"buy_{pid}")],
+        [InlineKeyboardButton(f"{rs(plan['price'])} - " + u("Permanent"), callback_data=f"buy_{pid}")],
         [InlineKeyboardButton(u("🔙 Back"), callback_data="menu_plans")],
     ]
     desc = plan.get("description", "")
@@ -448,7 +448,7 @@ async def show_plan(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"🌟 {b(plan['channel'])}\n\n"
         f"{desc}\n\n"
         f"{b('Available Plans')} 👇\n"
-        f"{b('Permanent')}: Rs.{plan['price']}\n\n"
+        f"{b('Permanent')}: {rs(plan['price'])}\n\n"
         f"{b('Select A Plan To Subscribe Or Click View Sample Content To See A Preview')}"
     )
     await safe_edit(query, context, msg, keyboard)
@@ -484,7 +484,7 @@ async def buy_plan(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if total >= price:
         keyboard = [
             [InlineKeyboardButton(
-                f"✅ {u('Pay')} Rs.{price} {u('from Wallet')}",
+                f"✅ {u('Pay')} {rs(price)} {u('from Wallet')}",
                 callback_data=f"wpay_{pid}"
             )],
             [InlineKeyboardButton(u("💳 Recharge Wallet"), callback_data="menu_wallet")],
@@ -495,11 +495,11 @@ async def buy_plan(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"💳 {b('Pay From Wallet')}\n\n"
             f"{b('Channel')}: {b(plan['channel'])}\n"
             f"{b('Plan')}: {b('Permanent')}\n"
-            f"{b('Amount')}: Rs.{price}\n\n"
+            f"{b('Amount')}: {rs(price)}\n\n"
             f"💳 {b('Your Wallet')}:\n"
-            f"  {b('Recharge Balance')}: Rs.{wb}\n"
-            f"  {b('Referral Balance')}: Rs.{rb}\n"
-            f"  {b('Total')}: Rs.{total}\n\n"
+            f"  {b('Recharge Balance')}: {rs(wb)}\n"
+            f"  {b('Referral Balance')}: {rs(rb)}\n"
+            f"  {b('Total')}: {rs(total)}\n\n"
             f"{b('Tap Below To Complete Your Purchase')} 👇"
         )
     else:
@@ -512,12 +512,12 @@ async def buy_plan(update: Update, context: ContextTypes.DEFAULT_TYPE):
         msg = (
             f"❌ {b('Insufficient Wallet Balance')}\n\n"
             f"{b('Channel')}: {b(plan['channel'])}\n"
-            f"{b('Amount Required')}: Rs.{price}\n\n"
+            f"{b('Amount Required')}: {rs(price)}\n\n"
             f"💳 {b('Your Wallet')}:\n"
-            f"  {b('Recharge Balance')}: Rs.{wb}\n"
-            f"  {b('Referral Balance')}: Rs.{rb}\n"
-            f"  {b('Total')}: Rs.{total}\n\n"
-            f"{b('You Need')} Rs.{need} {b('More To Buy This Plan')}\n"
+            f"  {b('Recharge Balance')}: {rs(wb)}\n"
+            f"  {b('Referral Balance')}: {rs(rb)}\n"
+            f"  {b('Total')}: {rs(total)}\n\n"
+            f"{b('You Need')} {rs(need)} {b('More To Buy This Plan')}\n"
             f"{b('Please Recharge Your Wallet First')} 👇"
         )
 
@@ -557,8 +557,8 @@ async def wallet_pay_plan(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg = (
         f"✅ {b('Payment Successful')}\n\n"
         f"🌟 {b('Welcome To')} {b(plan['channel'])}\n\n"
-        f"Rs.{plan['price']} {b('Deducted From Your Wallet')}\n"
-        f"{b('Remaining Balance')}: Rs.{wb + rb}\n\n"
+        f"{rs(plan['price'])} {b('Deducted From Your Wallet')}\n"
+        f"{b('Remaining Balance')}: {rs(wb + rb)}\n\n"
         f"{b('Click The Button Below To Join Your Premium Channel')} 👇\n\n"
         f"{b('If You Face Any Issue Contact')}: @{SUPPORT_USERNAME}"
     )
@@ -571,7 +571,7 @@ async def wallet_pay_plan(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"🛒 {b('New Purchase!')}\n\n"
         f"👤 {b('User')}: {uname}  |  <code>{user.id}</code>\n"
         f"📦 {b('Plan')}: {plan['channel']}\n"
-        f"💰 {b('Amount')}: Rs.{plan['price']}\n"
+        f"💰 {b('Amount')}: {rs(plan['price'])}\n"
         f"💳 {b('Payment')}: Wallet"
     )
     for admin_id in ADMIN_IDS:
@@ -593,9 +593,9 @@ async def menu_about(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"{b('Telegram ID')}: <code>{user.id}</code>\n"
         f"{b('Username')}: {username_str}\n\n"
         f"🌟 {b('Wallet')}\n"
-        f"  {b('Recharge Balance')}: Rs.{wb}\n"
-        f"  {b('Referral Balance')}: Rs.{rb}\n"
-        f"  {b('Total Balance')}: Rs.{wb + rb}"
+        f"  {b('Recharge Balance')}: {rs(wb)}\n"
+        f"  {b('Referral Balance')}: {rs(rb)}\n"
+        f"  {b('Total Balance')}: {rs(wb + rb)}"
     )
     await safe_edit(query, context, msg, keyboard)
 
@@ -608,7 +608,7 @@ async def menu_wallet(update: Update, context: ContextTypes.DEFAULT_TYPE):
     total = wb + rb
 
     amt_buttons = [
-        InlineKeyboardButton(f"Rs.{amt}", callback_data=f"wamt_{amt}")
+        InlineKeyboardButton(f"{rs(amt)}", callback_data=f"wamt_{amt}")
         for amt in RECHARGE_AMOUNTS
     ]
     keyboard = [amt_buttons]
@@ -617,9 +617,9 @@ async def menu_wallet(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     msg = (
         f"💳 {b('Your Wallet')}\n\n"
-        f"  {b('Recharge Balance')}: Rs.{wb}\n"
-        f"  {b('Referral Balance')}: Rs.{rb}\n"
-        f"  {b('Total Balance')}: Rs.{total}\n\n"
+        f"  {b('Recharge Balance')}: {rs(wb)}\n"
+        f"  {b('Referral Balance')}: {rs(rb)}\n"
+        f"  {b('Total Balance')}: {rs(total)}\n\n"
         f"💳 {b('Recharge Wallet')}\n"
         f"{b('Select An Amount To Add To Your Wallet')} 👇"
     )
@@ -739,7 +739,7 @@ async def handle_custom_recharge_input(update: Update, context: ContextTypes.DEF
     ]
     await update.message.reply_text(
         f"💳 {b('Wallet Recharge')}\n\n"
-        f"{b('Amount')}: Rs.{amt}\n\n"
+        f"{b('Amount')}: {rs(amt)}\n\n"
         f"{b('Choose Your Payment Method')} 👇\n"
         f"{b('Once Payment Is Done Your Wallet Will Be Credited Automatically')}",
         reply_markup=InlineKeyboardMarkup(keyboard),
@@ -766,7 +766,7 @@ async def wallet_amount_selected(update: Update, context: ContextTypes.DEFAULT_T
     ]
     msg = (
         f"💳 {b('Wallet Recharge')}\n\n"
-        f"{b('Amount')}: Rs.{amt}\n\n"
+        f"{b('Amount')}: {rs(amt)}\n\n"
         f"{b('Choose Your Payment Method')} 👇\n"
         f"{b('Once Payment Is Done Your Wallet Will Be Credited Automatically')}"
     )
@@ -806,7 +806,7 @@ async def wallet_pay_razorpay(update: Update, context: ContextTypes.DEFAULT_TYPE
         ]
         msg = (
             f"💳 {b('Razorpay Payment')}\n\n"
-            f"{b('Recharge Amount')}: Rs.{amt}\n\n"
+            f"{b('Recharge Amount')}: {rs(amt)}\n\n"
             f"{b('Click The Button Below To Open The Payment Page')}\n"
             f"{b('Once Paid, Click I Have Paid Button')}"
         )
@@ -915,7 +915,7 @@ async def wallet_pay_qr(update: Update, context: ContextTypes.DEFAULT_TYPE):
         ]
         caption = (
             f"📱 {b('UPI Wallet Recharge')}\n\n"
-            f"{b('Amount')}: Rs.{amt}\n\n"
+            f"{b('Amount')}: {rs(amt)}\n\n"
             f"{b('Scan The QR Code Above Using Any UPI App')}\n"
             f"{b('Once Paid, Tap I ve Completed Payment')} ✅ {b('Below')}\n\n"
             f"{b('If You Are Not Able To Pay In This QR Code Please Try With Paytm, PhonePay Or Any Other Upi App')}\n\n"
@@ -950,10 +950,10 @@ async def wallet_pay_crypto(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         rate        = get_usdt_inr_rate()
         usdt_amount = amt / rate
-        amount_line = f"{b('Amount')}: {usdt_amount:.2f} USDT  (Rs.{amt} @ Rs.{rate:.2f}/USDT)"
+        amount_line = f"{b('Amount')}: {n(f'{usdt_amount:.2f}')} USDT  ({rs(amt)} @ {n(f'{rate:.2f}')}/USDT)"
     except Exception as e:
         logger.error(f"USDT rate fetch failed: {e}")
-        amount_line = f"{b('Amount')}: Rs.{amt} {b('(Live Rate Unavailable, Contact Admin For USDT Amount)')}"
+        amount_line = f"{b('Amount')}: {rs(amt)} {b('(Live Rate Unavailable, Contact Admin For USDT Amount)')}"
 
     keyboard = [
         [InlineKeyboardButton(u("🎧 Contact Admin"), url=f"https://t.me/{SUPPORT_USERNAME}")],
@@ -1063,11 +1063,11 @@ async def wallet_done(update: Update, context: ContextTypes.DEFAULT_TYPE):
         ])
         await status_msg.edit_text(
             f"✅ {b('Wallet Recharged Successfully')}\n\n"
-            f"🌟 {b('Amount Added')}: Rs.{stored_amt}\n\n"
+            f"🌟 {b('Amount Added')}: {rs(stored_amt)}\n\n"
             f"{b('Your Wallet')}:\n"
-            f"  {b('Recharge Balance')}: Rs.{wb}\n"
-            f"  {b('Referral Balance')}: Rs.{rb}\n"
-            f"  {b('Total Balance')}: Rs.{wb + rb}\n\n"
+            f"  {b('Recharge Balance')}: {rs(wb)}\n"
+            f"  {b('Referral Balance')}: {rs(rb)}\n"
+            f"  {b('Total Balance')}: {rs(wb + rb)}\n\n"
             f"{b('You Can Now Buy Subscriptions')} 👇",
             reply_markup=keyboard,
             parse_mode=ParseMode.HTML,
@@ -1119,7 +1119,7 @@ async def menu_refer(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg = (
         f"🌟 {b('Refer and Earn')}\n\n"
         f"{b('Share Your Referral Link And Earn Rs.1 For Every New Member Who Joins')}\n\n"
-        f"{b('Total Referral Earned')}: Rs.{rb}\n\n"
+        f"{b('Total Referral Earned')}: {rs(rb)}\n\n"
         f"💡 {b('How It Works')}:\n"
         f"  1. {b('Tap Share Referral Link below')}\n"
         f"  2. {b('Forward to your friends or groups')}\n"
@@ -1209,7 +1209,7 @@ async def np_got_price(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return NP_PRICE
     context.user_data["np_price"] = price
     await update.message.reply_text(
-        f"✅ {b('Price')}: Rs.{price}\n\n"
+        f"✅ {b('Price')}: {rs(price)}\n\n"
         f"{b('Step 4/6')} — {b('Send The Payment Description.')}\n"
         f"{u('This appears in Razorpay during payment, e.g.')}\n"
         f"<code>Subscription: HAWT PACK</code>",
@@ -1289,7 +1289,7 @@ async def np_got_sample(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"✅ {b('Plan Added Successfully')}\n\n"
         f"{b('ID')}: <code>{pid}</code>\n"
         f"{b('Name')}: {name}\n"
-        f"{b('Price')}: Rs.{price}\n"
+        f"{b('Price')}: {rs(price)}\n"
         f"{b('Payment Description')}: {pay_desc}\n"
         f"{b('Channel Link(s)')}:\n{links_preview}\n"
         f"{b('Sample Link')}: {sample_link}",
@@ -1313,7 +1313,7 @@ async def cmd_removeplan(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(b("❌ No Plans Found."), parse_mode=ParseMode.HTML)
         return
     keyboard = [
-        [InlineKeyboardButton(f"❌ {p['channel']} — Rs.{p['price']}", callback_data=f"rmp_{p['id']}")]
+        [InlineKeyboardButton(f"❌ {p['channel']} — {rs(p['price'])}", callback_data=f"rmp_{p['id']}")]
         for p in plans
     ]
     keyboard.append([InlineKeyboardButton(u("❌ Cancel"), callback_data="rmp_cancel")])
@@ -1339,7 +1339,7 @@ async def rmp_select(update: Update, context: ContextTypes.DEFAULT_TYPE):
     ]]
     await query.edit_message_text(
         f"{b('Confirm Removal')}\n\n"
-        f"{b('Are You Sure You Want To Remove')} <b>{plan['channel']}</b> (Rs.{plan['price']})?\n\n"
+        f"{b('Are You Sure You Want To Remove')} <b>{plan['channel']}</b> ({rs(plan['price'])})?\n\n"
         f"{u('This action cannot be undone.')}",
         reply_markup=InlineKeyboardMarkup(keyboard),
         parse_mode=ParseMode.HTML,
@@ -1496,7 +1496,7 @@ async def cmd_editplan(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(b("❌ No Plans Found."), parse_mode=ParseMode.HTML)
         return
     keyboard = [
-        [InlineKeyboardButton(f"✏️ {p['channel']} — Rs.{p['price']}", callback_data=f"ep_p_{p['id']}")]
+        [InlineKeyboardButton(f"✏️ {p['channel']} — {rs(p['price'])}", callback_data=f"ep_p_{p['id']}")]
         for p in plans
     ]
     keyboard.append([InlineKeyboardButton(u("❌ Cancel"), callback_data="ep_cancel")])
@@ -1717,7 +1717,7 @@ async def handle_reply_keyboard(update: Update, context: ContextTypes.DEFAULT_TY
         msg = (
             f"🌟 {b('Refer and Earn')}\n\n"
             f"{b('Share Your Referral Link And Earn Rs.1 For Every New Member Who Joins')}\n\n"
-            f"{b('Total Referral Earned')}: Rs.{rb}\n\n"
+            f"{b('Total Referral Earned')}: {rs(rb)}\n\n"
             f"💡 {b('How It Works')}:\n"
             f"  1. {b('Tap Share Referral Link below')}\n"
             f"  2. {b('Forward to your friends or groups')}\n"
