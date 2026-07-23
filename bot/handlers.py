@@ -125,10 +125,12 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 pass
 
     msg = (
-        "<blockquote>"
+        f"{b('Hello!')} 👋🏻 {b('Welcome To The Premium Channel Bot')}\n\n"
+        "<blockquote><b>"
         "sᴜʙsᴄʀɪʙᴇ ᴛᴏ ᴘʀᴇᴍɪᴜᴍ ᴄʜᴀɴɴᴇʟs ᴀɴᴅ ɢᴇᴛ ᴇxᴄʟᴜsɪᴠᴇ ᴄᴏɴᴛᴇɴᴛ ɪɴsᴛᴀɴᴛʟʏ ⚡️\n\n"
         "💳 ʀᴇᴄʜᴀʀɢᴇ ʏᴏᴜʀ ᴡᴀʟʟᴇᴛ ᴀɴᴅ ɢᴇᴛ ʏᴏᴜʀ ᴘʀᴇᴍɪᴜᴍ ʟɪɴᴋ ɪɴ sᴇᴄᴏɴᴅs"
-        "</blockquote>"
+        "</b></blockquote>\n\n"
+        f"{b('Use The Buttons Below To Navigate')} 👇"
     )
     inline = [
         [InlineKeyboardButton(u("🛍️ Available Subscriptions"), callback_data="menu_plans")],
