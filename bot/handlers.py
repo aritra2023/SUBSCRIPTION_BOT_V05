@@ -116,7 +116,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             try:
                 await context.bot.send_message(
                     chat_id=referred_by,
-                    text=f"🌟 {b('Referral Bonus')}\n\n"
+                    text=f"🛍️ {b('Referral Bonus')}\n\n"
                          f"{b('Someone joined using your referral link.')}\n"
                          f"{b('Rs.1 has been credited to your referral balance.')}",
                     parse_mode=ParseMode.HTML,
@@ -265,7 +265,7 @@ async def cmd_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"{b('Total Payments')}: {total_payments}\n"
         f"{b('Total Revenue')}: {rs(revenue)}\n"
         f"{b('Total Wallet Recharges')}: {rs(total_recharged)}\n\n"
-        f"🌟 {b('Sales by Plan')}:\n{lines or b('No sales yet')}"
+        f"🛍️ {b('Sales by Plan')}:\n{lines or b('No sales yet')}"
     )
     await update.message.reply_text(msg, parse_mode=ParseMode.HTML)
 
@@ -423,7 +423,7 @@ async def menu_plans(update: Update, context: ContextTypes.DEFAULT_TYPE):
     buttons = [InlineKeyboardButton(u(p["channel"]), callback_data=f"showplan_{p['id']}") for p in plans]
     keyboard = [[b] for b in buttons]
     keyboard.append([InlineKeyboardButton(u("🔙 Back"), callback_data="back_main")])
-    msg = f"🌟 {b('Available Premium Channels')}\n\n{b('Select A Channel To View Subscription Plans')} 👇"
+    msg = f"🛍️ {b('Available Premium Channels')}\n\n{b('Select A Channel To View Subscription Plans')} 👇"
     await safe_edit(query, context, msg, keyboard)
 
 async def show_plan(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -447,7 +447,7 @@ async def show_plan(update: Update, context: ContextTypes.DEFAULT_TYPE):
     ]
     desc = plan.get("description", "")
     msg = (
-        f"🌟 {b(plan['channel'])}\n\n"
+        f"🛍️ {b(plan['channel'])}\n\n"
         f"{desc}\n\n"
         f"{b('Available Plans')} 👇\n"
         f"{b('Permanent')}: {rs(plan['price'])}\n\n"
@@ -462,7 +462,7 @@ async def sample_content(update: Update, context: ContextTypes.DEFAULT_TYPE):
     plan = get_plan(pid)
     keyboard = [[InlineKeyboardButton(u("🔙 Back"), callback_data=f"showplan_{pid}")]]
     msg = (
-        f"🌟 {b('Sample Content Preview')}\n\n"
+        f"🛍️ {b('Sample Content Preview')}\n\n"
         f"{b('Channel')}: {b(plan['channel']) if plan else ''}\n\n"
         f"{b('This Is A Premium Channel. Subscribe To Get Full Access To Exclusive Content.')}\n\n"
         f"{b('Contact Admin To Get A Sample')}: @{SUPPORT_USERNAME}"
@@ -558,7 +558,7 @@ async def wallet_pay_plan(update: Update, context: ContextTypes.DEFAULT_TYPE):
     wb, rb = get_wallet(query.from_user.id)
     msg = (
         f"✅ {b('Payment Successful')}\n\n"
-        f"🌟 {b('Welcome To')} {b(plan['channel'])}\n\n"
+        f"🛍️ {b('Welcome To')} {b(plan['channel'])}\n\n"
         f"{rs(plan['price'])} {b('Deducted From Your Wallet')}\n"
         f"{b('Remaining Balance')}: {rs(wb + rb)}\n\n"
         f"{b('Click The Button Below To Join Your Premium Channel')} 👇\n\n"
@@ -594,7 +594,7 @@ async def menu_about(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"👤 {b('Your Profile')}\n\n"
         f"{b('Telegram ID')}: <code>{user.id}</code>\n"
         f"{b('Username')}: {username_str}\n\n"
-        f"🌟 {b('Wallet')}\n"
+        f"🛍️ {b('Wallet')}\n"
         f"  {b('Recharge Balance')}: {rs(wb)}\n"
         f"  {b('Referral Balance')}: {rs(rb)}\n"
         f"  {b('Total Balance')}: {rs(wb + rb)}"
@@ -962,7 +962,7 @@ async def wallet_pay_crypto(update: Update, context: ContextTypes.DEFAULT_TYPE):
         [InlineKeyboardButton(u("🔙 Back"),           callback_data=f"wamt_{amt}")],
     ]
     msg = (
-        f"🌟 {b('Wallet Recharge Via Crypto (USDT)')}\n\n"
+        f"🛍️ {b('Wallet Recharge Via Crypto (USDT)')}\n\n"
         f"{amount_line}\n\n"
         f"{b('Network')}: {b(CRYPTO_NETWORK)}\n"
         f"💼 {b('Wallet Address')}:\n\n<code>{CRYPTO_ADDRESS}</code>\n\n"
@@ -1059,13 +1059,13 @@ async def wallet_done(update: Update, context: ContextTypes.DEFAULT_TYPE):
         })
         wb, rb = get_wallet(query.from_user.id)
         keyboard = InlineKeyboardMarkup([
-            [InlineKeyboardButton(u("🌟 Browse Subscriptions"), callback_data="menu_plans")],
+            [InlineKeyboardButton(u("🛍️ Browse Subscriptions"), callback_data="menu_plans")],
             [InlineKeyboardButton(u("💰 Wallet"),               callback_data="menu_wallet")],
             [InlineKeyboardButton(u("🔙 Main Menu"),            callback_data="back_main")],
         ])
         await status_msg.edit_text(
             f"✅ {b('Wallet Recharged Successfully')}\n\n"
-            f"🌟 {b('Amount Added')}: {rs(stored_amt)}\n\n"
+            f"🛍️ {b('Amount Added')}: {rs(stored_amt)}\n\n"
             f"{b('Your Wallet')}:\n"
             f"  {b('Recharge Balance')}: {rs(wb)}\n"
             f"  {b('Referral Balance')}: {rs(rb)}\n"
@@ -1119,7 +1119,7 @@ async def menu_refer(update: Update, context: ContextTypes.DEFAULT_TYPE):
         [InlineKeyboardButton(u("🔙 Main Menu"), callback_data="back_main")],
     ]
     msg = (
-        f"🌟 {b('Refer and Earn')}\n\n"
+        f"🛍️ {b('Refer and Earn')}\n\n"
         f"{b('Share Your Referral Link And Earn Rs.1 For Every New Member Who Joins')}\n\n"
         f"{b('Total Referral Earned')}: {rs(rb)}\n\n"
         f"💡 {b('How It Works')}:\n"
@@ -1153,7 +1153,7 @@ async def developer(update: Update, context: ContextTypes.DEFAULT_TYPE):
         [InlineKeyboardButton(u("🔙 Main Menu"),          callback_data="back_main")],
     ]
     msg = (
-        f"🌟 {b('Bot Developer / Creator')}\n\n"
+        f"🛍️ {b('Bot Developer / Creator')}\n\n"
         f"{b('This Bot Was Developed By')}: @{DEV_USERNAME}\n\n"
         f"{b('For Bot Related Queries Or Custom Bot Development Contact The Developer')}"
     )
@@ -1717,7 +1717,7 @@ async def handle_reply_keyboard(update: Update, context: ContextTypes.DEFAULT_TY
             [InlineKeyboardButton(u("🔗 Share Referral Link"), url=share_url)],
         ]
         msg = (
-            f"🌟 {b('Refer and Earn')}\n\n"
+            f"🛍️ {b('Refer and Earn')}\n\n"
             f"{b('Share Your Referral Link And Earn Rs.1 For Every New Member Who Joins')}\n\n"
             f"{b('Total Referral Earned')}: {rs(rb)}\n\n"
             f"💡 {b('How It Works')}:\n"
