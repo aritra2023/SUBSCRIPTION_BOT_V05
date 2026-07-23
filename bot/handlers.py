@@ -10,8 +10,8 @@ from datetime import datetime, timezone
 
 # ── Welcome images (randomly shown on /start) ─────────────────────────────────
 START_IMAGES = [
-    "https://files.catbox.moe/i4dclo.jpg",
-    "https://files.catbox.moe/wpujf4.jpg",
+    "https://files.catbox.moe/v80oav.jpg",
+    "https://files.catbox.moe/tf6osf.jpg",
 ]
 
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup
@@ -125,10 +125,10 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 pass
 
     msg = (
-        f"{b('Hello!')} 👋🏻 {b('Welcome To The Premium Channel Bot')}\n\n"
-        f"{b('Subscribe To Premium Channels And Get Exclusive Content Instantly')} ⚡\n\n"
-        f"💳 {b('Recharge Your Wallet And Get Your Premium Link In Seconds')}\n\n"
-        f"{b('Use The Buttons Below To Navigate')} 👇"
+        "<blockquote>"
+        "sᴜʙsᴄʀɪʙᴇ ᴛᴏ ᴘʀᴇᴍɪᴜᴍ ᴄʜᴀɴɴᴇʟs ᴀɴᴅ ɢᴇᴛ ᴇxᴄʟᴜsɪᴠᴇ ᴄᴏɴᴛᴇɴᴛ ɪɴsᴛᴀɴᴛʟʏ ⚡️\n\n"
+        "💳 ʀᴇᴄʜᴀʀɢᴇ ʏᴏᴜʀ ᴡᴀʟʟᴇᴛ ᴀɴᴅ ɢᴇᴛ ʏᴏᴜʀ ᴘʀᴇᴍɪᴜᴍ ʟɪɴᴋ ɪɴ sᴇᴄᴏɴᴅs"
+        "</blockquote>"
     )
     inline = [
         [InlineKeyboardButton(u("🛍️ Available Subscriptions"), callback_data="menu_plans")],
@@ -162,7 +162,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             pass
         await context.bot.send_photo(
             chat_id=chat_id,
-            photo="https://files.catbox.moe/v80oav.jpg",
+            photo=random.choice(START_IMAGES),
             caption=msg,
             reply_markup=InlineKeyboardMarkup(inline),
             parse_mode=ParseMode.HTML,
