@@ -1204,15 +1204,14 @@ async def wallet_pay_fampay(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.answer()
     amt = int(query.data[len("wfampay_"):])
     keyboard = [
-        [InlineKeyboardButton(u("✅ I Have Paid"), callback_data=f"wdone_fampay_fampay_{amt}")],
         [InlineKeyboardButton(u("🎧 Contact Admin"), url=f"https://t.me/{SUPPORT_USERNAME}")],
-        [InlineKeyboardButton(u("🔙 Back"), callback_data=f"wamt_{amt}")],
+        [InlineKeyboardButton(u("🔙 Back"),           callback_data=f"wamt_{amt}")],
     ]
     caption = (
         f"💳 {b('FamPay Payment')}\n\n"
         f"{b('Amount')}: {rs(amt)}\n\n"
-        f"{b('Scan The QR Code Above To Pay Via FamPay')}\n"
-        f"{b('Once Paid, Click I Have Paid Button')}"
+        f"{b('Scan The QR Code Above To Pay Via FamPay')}\n\n"
+        f"<blockquote>{b('After Payment, Send The Screenshot Of Your Transaction To Admin')}</blockquote>"
     )
     chat_id = query.message.chat_id
     try:
